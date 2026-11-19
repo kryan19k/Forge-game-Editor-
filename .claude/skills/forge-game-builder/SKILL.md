@@ -13,8 +13,9 @@ FORGE is an engine where agents are the primary developers: a human **Director**
 2. Read: `forge_scene_outline`, `forge_game_settings`, `forge_database`, `forge_brief` (if the project came from a genre interview).
 3. Change: `forge_apply` — one transaction per logical change, a label a human would write, and `baseRevision`. On `CONFLICT`, re-read and redo. Never touch `LOCKED` entities.
 4. **Prove it**: `forge_playtest` for behavior, `forge_capture` for looks, `forge_database` lint for data. A gameplay claim without a passing playtest is not done.
-5. `forge_status(idle, "<result>")`; check `forge_directives`; answer the Director's directives with a one-line result.
+5. Read `forge_team_inbox` before starting and between tasks. Track its cursor per project and read all pages. If paused, stop starting work and wait for the Director to resume. Reply with `forge_team_message` and use `thread: "dm"` for your direct conversation. Use `@agent-id` to mention a teammate.
 6. Check `forge_activity` between tasks. Store its returned cursor per project and use it as `since` on the next call. Read subsequent pages while `hasMore` is true. If `truncated` is true, refresh the scene outline to regain context. Offer unsolicited follow-ups only if the Director enabled `settings.autoReact`. For example, offer to populate a new watchtower with guards and wait for direction before editing.
+7. Use `forge_think` at decision points to share a short decision summary, tradeoff or progress update. Use `forge_plan` for ordered proposals that need approval, then read the Director's edits and decisions in the inbox and carry out approved steps in their reviewed order. Claim and close assigned work via `forge_directive_update`. Use `forge_status(idle, "<result>")` when done.
 
 ## Load the right specialist skill
 

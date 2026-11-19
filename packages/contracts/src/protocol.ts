@@ -4,6 +4,7 @@ import { EntityId } from './primitives';
 import type { DesignBrief } from './design';
 import type { SceneDoc } from './scene';
 import { ActivitySettings, type SceneActivity } from './activity';
+import { TeamAgentId, TeamFocus, TeamPlanReview, TeamText, TeamThread, type Directive, type TeamEvent, type TeamSnapshot, type TeamThinking } from './team';
 
 /* ── Crew: agents and humans connected to a project ───────────────────── */
 
@@ -35,22 +36,6 @@ export interface HistoryEntry {
   revertedBy?: string;
 }
 
-/* ── Directives: human intent queued for the crew ─────────────────────── */
-
-export const DirectiveStatus = z.enum(['open', 'claimed', 'done', 'rejected']);
-export type DirectiveStatus = z.infer<typeof DirectiveStatus>;
-
-export interface Directive {
-  id: string;
-  text: string;
-  status: DirectiveStatus;
-  createdAt: number;
-  createdBy: string;
-  focusEntityIds: EntityId[];
-  claimedBy?: string;
-  response?: string;
-}
-
 /* ── Comms log ────────────────────────────────────────────────────────── */
 
 export interface CommsEntry {
@@ -80,6 +65,7 @@ export type ServerMessage =
       comms: CommsEntry[];
       activity: SceneActivity[];
       activitySettings: ActivitySettings;
+      team: TeamSnapshot;
       you: CrewMember;
       brief: DesignBrief | null;
     }
@@ -91,6 +77,9 @@ export type ServerMessage =
   | { type: 'comms'; entry: CommsEntry }
   | { type: 'scene.activity'; entry: SceneActivity }
   | { type: 'activity.settings'; settings: ActivitySettings }
+  | { type: 'team.event'; event: TeamEvent }
+  | { type: 'team.thinking'; thinking: TeamThinking | null }
+  | { type: 'team.rejected'; message: string }
   | { type: 'brief'; brief: DesignBrief | null }
   | {
       type: 'capture.request';
@@ -112,6 +101,9 @@ export const ClientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('history.revert'), txId: z.string() }),
   z.object({ type: z.literal('selection'), entityIds: z.array(EntityId).max(500) }),
   z.object({ type: z.literal('activity.settings'), settings: ActivitySettings }),
+  z.object({ type: z.literal('team.message'), thread: TeamThread, text: TeamText, focusEntityIds: TeamFocus.default([]) }),
+  z.object({ type: z.literal('team.review'), review: TeamPlanReview }),
+  z.object({ type: z.literal('team.pause'), agentId: TeamAgentId, paused: z.boolean() }),
   z.object({
     type: z.literal('directive.create'),
     text: z.string().trim().min(1).max(2000),

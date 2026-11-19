@@ -2,6 +2,7 @@ import {
   ActivitySettings,
   SceneActivity,
   SceneDoc,
+  TEAM_THREAD,
   newId,
   type Author,
   type ActivityPage,
@@ -18,6 +19,7 @@ import {
   type ProjectInfo,
   type ServerMessage,
   type Transaction,
+  type TeamThinking,
   type TxError,
 } from '@forge/contracts';
 import { applyTransaction, buildTransaction, describeSceneChanges } from '@forge/scene';
@@ -26,6 +28,7 @@ import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { appendFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { TeamRoom } from './team';
 
 interface Record_ {
   entry: HistoryEntry;
@@ -53,7 +56,8 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
   private readonly undoTxIds = new Set<string>();
   private readonly redoStacks = new Map<string, string[]>();
   readonly crew = new Map<string, CrewMember>();
-  readonly directives = new Map<string, Directive>();
+  readonly team: TeamRoom;
+  get directives(): ReadonlyMap<string, Directive> { return this.team.directives; }
   readonly comms: CommsEntry[] = [];
   humanSelection: EntityId[] = [];
   private saveTimer: NodeJS.Timeout | undefined;
@@ -69,6 +73,7 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
     super();
     this.dir = join(workspaceDir, projectId);
     mkdirSync(this.dir, { recursive: true });
+    this.team = new TeamRoom(join(this.dir, 'team.jsonl'), (event) => this.emit('message', { type: 'team.event', event }));
     const settingsPath = join(this.dir, 'activity.json');
     this.activitySettings = ActivitySettings.parse(existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, 'utf8')) : {});
     const scenePath = join(this.dir, 'scene.json');
@@ -224,6 +229,11 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
 
   /* ── crew, comms, directives ───────────────────────────────────────── */
 
+  publishThinking(thinking: TeamThinking | null): void {
+    this.team.thinking = thinking;
+    this.emit('message', { type: 'team.thinking', thinking });
+  }
+
   readActivity(since?: number): ActivityPage {
     const records = this.order.map((id) => this.records.get(id)!);
     const entries = records.flatMap((record) => record.activity ? [record.activity] : []);
@@ -296,8 +306,7 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
 
   createDirective(createdBy: Author, text: string, focusEntityIds: EntityId[]): Directive {
     const d: Directive = { id: newId('dir'), text, status: 'open', createdAt: Date.now(), createdBy: createdBy.name, focusEntityIds };
-    this.directives.set(d.id, d);
-    this.log(createdBy, 'info', `DIRECTIVE ▸ ${text}`);
+    this.team.note(createdBy, TEAM_THREAD, 'message', text, focusEntityIds, { directive: d });
     this.emitDirectives();
     return d;
   }
@@ -305,12 +314,10 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
   updateDirective(id: string, author: Author, status: DirectiveStatus, response?: string): Directive | undefined {
     const d = this.directives.get(id);
     if (!d) return undefined;
-    d.status = status;
-    if (status === 'claimed') d.claimedBy = author.name;
-    if (response) d.response = response;
-    this.log(author, status === 'rejected' ? 'warn' : 'info', `${status.toUpperCase()} “${d.text.slice(0, 60)}”${response ? ` — ${response}` : ''}`);
+    const directive = { ...d, status, ...(status === 'claimed' ? { claimedBy: author.name } : {}), ...(response ? { response } : {}) };
+    this.team.note(author, TEAM_THREAD, 'result', response?.trim() || d.text, [], { directive });
     this.emitDirectives();
-    return d;
+    return directive;
   }
 
   private emitDirectives(): void {

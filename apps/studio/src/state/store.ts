@@ -1,6 +1,7 @@
 import type {
   ActivitySettings,
   SceneActivity,
+  TeamSnapshot,
   ClientMessage,
   CommsEntry,
   CrewMember,
@@ -34,6 +35,7 @@ export interface StudioState {
   comms: CommsEntry[];
   activity: SceneActivity[];
   activitySettings: ActivitySettings;
+  team: TeamSnapshot;
   me: CrewMember | null;
   selection: EntityId[];
   gizmo: GizmoMode;
@@ -59,6 +61,7 @@ export const useStudio = create<StudioState>(() => ({
   comms: [],
   activity: [],
   activitySettings: { autoReact: false },
+  team: { events: [], paused: [], thinking: null },
   me: null,
   selection: [],
   gizmo: 'translate',
@@ -126,6 +129,7 @@ function handle(msg: ServerMessage): void {
         comms: msg.comms,
         activity: msg.activity,
         activitySettings: msg.activitySettings,
+        team: msg.team,
         me: msg.you,
         selection: sel,
         brief: msg.brief,
@@ -165,6 +169,24 @@ function handle(msg: ServerMessage): void {
       return;
     case 'activity.settings':
       set({ activitySettings: msg.settings });
+      return;
+    case 'team.event': {
+      const event = msg.event;
+      set(({ team }) => {
+        const thread = team.events.filter((e) => e.thread === event.thread);
+        const oldest = thread.length >= 120 ? thread[0]!.sequence : null;
+        const paused = event.kind === 'guidance'
+          ? event.paused ? [...team.paused, event.agentId] : team.paused.filter((id) => id !== event.agentId)
+          : team.paused;
+        return { team: { ...team, events: [...team.events.filter((e) => e.sequence !== oldest), event], paused } };
+      });
+      return;
+    }
+    case 'team.thinking':
+      set(({ team }) => ({ team: { ...team, thinking: msg.thinking } }));
+      return;
+    case 'team.rejected':
+      toast('error', 'Team Room', msg.message);
       return;
     case 'brief':
       set({ brief: msg.brief });

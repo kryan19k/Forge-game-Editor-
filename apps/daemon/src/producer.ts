@@ -74,13 +74,20 @@ export class Producer {
    * phase "interview": draft GDD + plan and ask follow-ups.
    * phase "final": fold the answered follow-ups into the final GDD + plan (no new questions).
    */
-  async design(brief: DesignBrief, starter: StarterInfo, phase: 'interview' | 'final'): Promise<ProducerOutput> {
+  async design(
+    brief: DesignBrief,
+    starter: StarterInfo,
+    phase: 'interview' | 'final',
+    guidance: string[],
+    onThinking: (text: string, complete: boolean) => void,
+  ): Promise<ProducerOutput> {
     const questions = starter.questions.map((q) => ({ id: q.id, prompt: q.prompt, answer: brief.answers[q.id] ?? q.default ?? '(skipped)' }));
     const user = [
       `Genre starter: ${starter.name} (${starter.genre}). Working title: "${brief.title}".`,
       `Interview answers:\n${JSON.stringify(questions, null, 2)}`,
       brief.followUps.length ? `Follow-up answers:\n${JSON.stringify(brief.followUps.map((f) => ({ q: f.prompt, a: f.answer ?? '(unanswered)' })), null, 2)}` : '',
       `Current draft design notes:\n${brief.gdd}`,
+      guidance.length ? `Director guidance from the Team Room:\n${JSON.stringify(guidance)}` : '',
       phase === 'interview'
         ? 'Draft the GDD and build plan, and ask 3-5 follow-up questions for the decisions that most change what gets built.'
         : 'Write the final GDD and build plan incorporating every answer. Return an empty followUps array.',
@@ -88,14 +95,27 @@ export class Producer {
       .filter(Boolean)
       .join('\n\n');
 
-    const run = (model: string) =>
-      this.client().messages.parse({
+    const run = (model: string) => {
+      let lastUpdate = 0;
+      const stream = this.client().messages.stream({
         model,
         max_tokens: 16000,
         output_config: { effort: 'high', format: zodOutputFormat(ProducerOutput) },
+        thinking: { type: 'adaptive', display: 'summarized' },
         system: SYSTEM,
         messages: [{ role: 'user', content: user }],
       });
+      stream.on('thinking', (_delta, summary) => {
+        const now = Date.now();
+        if (now - lastUpdate < 200) return;
+        lastUpdate = now;
+        onThinking(summary, false);
+      });
+      stream.on('contentBlock', (block) => {
+        if (block.type === 'thinking') onThinking(block.thinking, true);
+      });
+      return stream.finalMessage();
+    };
 
     try {
       let res = await run(MODEL);

@@ -11,6 +11,15 @@ import {
   DesignAnswer,
   Mutation,
   PlaytestScript,
+  PlanSteps,
+  PublishedKind,
+  TEAM_THREAD,
+  TeamAgentId,
+  TeamFocus,
+  TeamInboxCursor,
+  TeamPostKind,
+  TeamTarget,
+  TeamText,
   type DesignBrief,
   type Author,
   type PlaytestReport,
@@ -67,6 +76,7 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
       comms: store.comms.slice(-200),
       activity: store.readActivity().activity,
       activitySettings: store.activitySettings,
+      team: store.team.snapshot(),
       brief: store.brief,
       you,
     });
@@ -116,6 +126,17 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
           return;
         case 'activity.settings':
           store.setActivitySettings(msg.settings);
+          return;
+        case 'team.message':
+        case 'team.review':
+        case 'team.pause':
+          try {
+            if (msg.type === 'team.message') store.team.note(DIRECTOR, msg.thread, 'message', msg.text, msg.focusEntityIds.filter((id) => store.scene.entities[id]));
+            else if (msg.type === 'team.review') store.team.review(DIRECTOR, msg.review);
+            else store.team.setPaused(DIRECTOR, msg.agentId, msg.paused);
+          } catch (error) {
+            send(socket, { type: 'team.rejected', message: (error as Error).message });
+          }
           return;
         case 'directive.create':
           store.createDirective(DIRECTOR, msg.text, msg.focusEntityIds);
@@ -172,7 +193,7 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
         };
         const s = hub.createFromScene(`starter:${st.id}`, title, st.build(body.data.answers, title), brief);
         s.log({ kind: 'system', id: 'forge', name: 'FORGE' }, 'info', `New ${st.name} “${title}” forged from the design interview — playable greybox ready`);
-        s.createDirective(DIRECTOR, `Build “${title}” from the design brief. Load the ${st.skill} skill, read forge_brief, ask the Director any open questions with forge_ask, then follow the plan.`, []);
+        s.createDirective(DIRECTOR, `Build “${title}” from the design brief. Load the ${st.skill} skill, read forge_brief, and bring open questions and build steps to the Director in Team Room.`, []);
         // Auto-run only with explicit credentials; unverified (e.g. a stored login) waits for the Director's click — no surprise billing.
         if (producer && ['saved', 'environment'].includes(producer.status().source)) void produce(s, 'interview');
         return { ok: true, project: s.project, skill: st.skill };
@@ -200,26 +221,48 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
 
   app.get('/api/starters', async () => ({ starters: Object.values(starters).map(starterInfo), producer: producer?.status() ?? { available: false, source: 'none' } }));
 
+  const producing = new WeakSet<ProjectStore>();
   /** Run the embedded Producer for the active brief, if credentials exist. Never throws. */
   const produce = async (target: ProjectStore, phase: 'interview' | 'final') => {
     const brief = target.brief;
     const starter = brief ? starters[brief.starter] : undefined;
-    if (!brief || !starter || !producer || !producer.status().available) return;
+    if (!brief || !starter || !producer || !producer.status().available || producing.has(target) || target.team.isPaused('producer')) return;
     const by = { kind: 'agent' as const, id: 'producer', name: 'Producer' };
     target.touchCrew(by, { status: 'working', message: phase === 'interview' ? `Drafting the design for “${brief.title}”` : 'Finalizing the design doc' });
     target.setBrief({ ...brief, status: 'designing', producer: { kind: 'embedded' } });
+    producing.add(target);
     try {
-      const out = await producer.design(target.brief!, starterInfo(starter), phase);
+      const guidance = target.team.snapshot().events.flatMap((event) =>
+        event.kind === 'message' && event.author.kind === 'human' &&
+        (event.thread === by.id || event.mentions.includes(by.id)) ? [event.text] : []).slice(-10);
+      const out = await producer.design(target.brief!, starterInfo(starter), phase, guidance, (summary, complete) => {
+        const text = summary.trim().slice(0, 2000);
+        if (complete) {
+          if (text) target.team.note(by, TEAM_THREAD, 'thought', text, [], { source: 'provider_summary' });
+          target.publishThinking(null);
+        } else if (text) target.publishThinking({ author: by, text });
+      });
       const followUps = out.followUps.map((f, i) => ({ id: `f${Date.now().toString(36)}${i}`, prompt: f.prompt, options: f.options.slice(0, 4), askedBy: 'Producer', at: Date.now() }));
       const cur = target.brief!;
       target.setBrief({ ...cur, gdd: out.gdd, plan: out.plan, followUps: [...cur.followUps, ...followUps], status: followUps.length ? 'interview' : 'ready', producer: { kind: 'embedded' } });
-      target.log(by, 'action', followUps.length ? `PRODUCER ▸ design drafted · ${followUps.length} follow-up question${followUps.length > 1 ? 's' : ''} for the Director` : 'PRODUCER ▸ design doc final · build plan ready for the crew');
+      const result = followUps.length ? 'The draft is ready. Answer the follow-up questions in Design.' : 'The design is ready. Review the build steps before the team starts.';
+      target.team.note(by, TEAM_THREAD, 'result', result);
+      if (guidance.length) target.team.note(by, by.id, 'result', result);
+      for (const question of followUps) {
+        const text = TeamText.safeParse(question.prompt.slice(0, 2000));
+        if (text.success) target.team.note(by, TEAM_THREAD, 'question', text.data);
+      }
+      const steps = PlanSteps.safeParse(out.plan.map((step) => step.slice(0, 400)).filter((step) => step.trim()).slice(0, 40));
+      if (steps.success) target.team.propose(by, TEAM_THREAD, steps.data);
       target.touchCrew(by, { status: followUps.length ? 'waiting' : 'idle', message: followUps.length ? 'Waiting on your answers' : 'Design ready' });
     } catch (err) {
       const cur = target.brief!;
       target.setBrief({ ...cur, status: 'interview', producer: { kind: 'agent', note: (err as Error).message } });
       target.log(by, 'warn', `PRODUCER unavailable: ${(err as Error).message} — an MCP agent can run the interview via forge_brief / forge_ask`);
       target.touchCrew(by, { status: 'blocked', message: 'No Claude credentials' });
+    } finally {
+      target.publishThinking(null);
+      producing.delete(target);
     }
   };
 
@@ -251,7 +294,7 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
     const author = agentFrom(req);
     const f = { id: `f${Date.now().toString(36)}${b.followUps.length}`, prompt: body.data.prompt, options: body.data.options, askedBy: author.name, at: Date.now() };
     store.setBrief({ ...b, followUps: [...b.followUps, f], status: 'interview', producer: b.producer.kind === 'embedded' ? b.producer : { kind: 'agent' } });
-    store.log(author, 'info', `QUESTION ▸ ${f.prompt}`);
+    if (TeamAgentId.safeParse(author.id).success) store.team.note(author, TEAM_THREAD, 'question', f.prompt);
     store.touchCrew(author, { status: 'waiting', message: 'Waiting on the Director’s answer' });
     return { ok: true, id: f.id };
   });
@@ -355,6 +398,45 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
     const query = z.object({ since: z.coerce.number().pipe(ActivityCursor).optional() }).safeParse(req.query);
     if (!query.success) return reply.code(400).send({ error: z.prettifyError(query.error) });
     return store.readActivity(query.data.since);
+  });
+
+  const teamAgent = (req: FastifyRequest): Author | null => {
+    const author = agentFrom(req);
+    return TeamAgentId.safeParse(author.id).success && author.id.toLowerCase() !== 'producer' ? author : null;
+  };
+
+  app.get('/api/team/inbox', async (req, reply) => {
+    const author = teamAgent(req);
+    const query = z.object({ since: z.coerce.number().pipe(TeamInboxCursor).optional() }).safeParse(req.query);
+    if (!author || !query.success) return reply.code(400).send({ error: 'Invalid agent id or inbox cursor' });
+    if (!store.crew.has(author.id)) store.touchCrew(author);
+    return { projectId: store.project.projectId, ...store.team.inbox(author.id, query.data.since) };
+  });
+
+  app.post('/api/team/message', async (req, reply) => {
+    const author = teamAgent(req);
+    const body = z.object({ thread: TeamTarget, kind: TeamPostKind, text: TeamText, focusEntityIds: TeamFocus.default([]) }).safeParse(req.body);
+    if (!author || !body.success) return reply.code(400).send({ error: author && !body.success ? z.prettifyError(body.error) : 'Invalid agent id' });
+    const { thread, kind, text, focusEntityIds } = body.data;
+    if (!store.crew.has(author.id)) store.touchCrew(author);
+    return store.team.note(author, thread === 'dm' ? author.id : TEAM_THREAD, kind, text, focusEntityIds);
+  });
+
+  app.post('/api/team/think', async (req, reply) => {
+    const author = teamAgent(req);
+    const body = z.object({ thread: TeamTarget, kind: PublishedKind, text: TeamText }).safeParse(req.body);
+    if (!author || !body.success) return reply.code(400).send({ error: author && !body.success ? z.prettifyError(body.error) : 'Invalid agent id' });
+    const { thread, kind, text } = body.data;
+    if (!store.crew.has(author.id)) store.touchCrew(author);
+    return store.team.note(author, thread === 'dm' ? author.id : TEAM_THREAD, kind === 'plan' ? 'thought' : kind, text, [], { source: 'published' });
+  });
+
+  app.post('/api/team/plan', async (req, reply) => {
+    const author = teamAgent(req);
+    const body = z.object({ thread: TeamTarget, steps: PlanSteps }).safeParse(req.body);
+    if (!author || !body.success) return reply.code(400).send({ error: author && !body.success ? z.prettifyError(body.error) : 'Invalid agent id' });
+    if (!store.crew.has(author.id)) store.touchCrew(author);
+    return store.team.propose(author, body.data.thread === 'dm' ? author.id : TEAM_THREAD, body.data.steps);
   });
 
   app.get('/api/selection', async () => ({

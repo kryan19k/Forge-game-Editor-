@@ -5,7 +5,10 @@
  * validated, conflict-checked, lock-respecting, undoable, and visible to the human
  * in the Studio as it happens.
  */
-import { ActivityCursor, AgentStatus, CaptureView, ComponentName, DirectiveStatus, EntityId, Mutation, PlaytestStep } from '@forge/contracts';
+import {
+  ActivityCursor, AgentStatus, CaptureView, ComponentName, DirectiveStatus, EntityId, Mutation, PlanSteps,
+  PlaytestStep, PublishedKind, TeamFocus, TeamInboxCursor, TeamPostKind, TeamTarget, TeamText,
+} from '@forge/contracts';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -51,7 +54,7 @@ Workflow:
 2. forge_scene_outline to read the scene; forge_get_entities for full JSON of specific entities.
 3. forge_apply with ONE transaction per logical change and a clear human-readable label. Pass the baseRevision you read: if a human changed those entities meanwhile you get CONFLICT — re-read and retry, never blindly overwrite.
 4. forge_capture to SEE the result, and forge_playtest to PROVE gameplay works (walk_to, interact, expect). Check both before reporting done.
-5. Check forge_directives for queued instructions from the Director; claim, then mark done with a short response.
+5. Read forge_team_inbox before work and between steps. Respect pauses and review decisions, reply with forge_team_message, and publish concise decision summaries with forge_think. Check forge_directives for queued work; claim it and mark it done.
 6. Check forge_activity between tasks. Keep its cursor per project and continue while hasMore is true. Only offer unsolicited follow-ups on scene activity when settings.autoReact is true.
 
 Genres: start new games with forge_project_create from a template (exploration, rpg, mmorpg, fighting, racing) and load the matching FORGE skill (forge-rpg, forge-mmo, forge-fighting, forge-racing; forge-game-builder for everything) — also available as MCP prompts on this server. Game rules live in scene.game (forge_game_settings; change via set_game).
@@ -176,6 +179,47 @@ server.registerTool(
     await call('POST', '/api/presence', args);
     return text('status posted');
   },
+);
+
+server.registerTool(
+  'forge_team_inbox',
+  {
+    title: 'Read Team Room inbox',
+    description: 'Read #team messages, your DM with the Director, @mentions, and plan decisions. Save the cursor per project and continue while hasMore is true. When paused is true, wait for the Director to resume you.',
+    inputSchema: { since: TeamInboxCursor.optional() },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ since }) => text(await call('GET', since === undefined ? '/api/team/inbox' : `/api/team/inbox?since=${since}`)),
+);
+
+server.registerTool(
+  'forge_team_message',
+  {
+    title: 'Send a Team Room message',
+    description: 'Post a message, question, or result to #team (team) or your direct thread with the Director (dm). Mention an agent by @id.',
+    inputSchema: { text: TeamText, thread: TeamTarget, kind: TeamPostKind, focusEntityIds: TeamFocus.optional() },
+  },
+  async (args) => text(await call('POST', '/api/team/message', args)),
+);
+
+server.registerTool(
+  'forge_think',
+  {
+    title: 'Publish a brief decision or progress update',
+    description: 'Share a concise decision summary, next step, or progress update with the Director. Use forge_plan for steps that need review.',
+    inputSchema: { text: TeamText, kind: PublishedKind, thread: TeamTarget },
+  },
+  async (args) => text(await call('POST', '/api/team/think', args)),
+);
+
+server.registerTool(
+  'forge_plan',
+  {
+    title: 'Propose build steps for review',
+    description: 'Post ordered steps. Wait for Director review and read the decisions and edits via forge_team_inbox before proceeding.',
+    inputSchema: { steps: PlanSteps, thread: TeamTarget },
+  },
+  async (args) => text(await call('POST', '/api/team/plan', args)),
 );
 
 server.registerTool(

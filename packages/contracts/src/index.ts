@@ -8,3 +8,4 @@ export * from './net';
 export * from './database';
 export * from './design';
 export * from './activity';
+export * from './team';
