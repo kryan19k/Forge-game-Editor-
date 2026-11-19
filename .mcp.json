@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "forge": {
+      "command": "node",
+      "args": [
+        "scripts/forge-mcp.mjs"
+      ],
+      "env": {
+        "FORGE_URL": "http://127.0.0.1:4317",
+        "FORGE_AGENT_ID": "claude-code",
+        "FORGE_AGENT_NAME": "Claude"
+      }
+    }
+  }
+}

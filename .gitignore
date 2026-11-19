@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.turbo/
+*.log
+.DS_Store
+# Live project workspaces written by the daemon (seeded from packages/templates)
+workspace/
+test-results/
+playwright-report/
+.env
+.env.*
+smoke-capture.png

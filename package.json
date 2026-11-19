@@ -1,0 +1,19 @@
+{
+  "name": "forge",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.29.2",
+  "scripts": {
+    "dev": "turbo run dev --parallel --filter=@forge/daemon --filter=@forge/studio",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "mcp": "pnpm --filter @forge/mcp-server start",
+    "verify": "pnpm typecheck && pnpm test",
+    "smoke:mcp": "pnpm --filter @forge/mcp-server smoke"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15",
+    "turbo": "^2.11.13",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@forge/daemon",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.10.0",
+    "@fastify/cors": "^11.4.3",
+    "@fastify/websocket": "^11.3.7",
+    "@forge/contracts": "workspace:*",
+    "@forge/game-runtime": "workspace:*",
+    "@forge/scene": "workspace:*",
+    "@forge/templates": "workspace:*",
+    "fastify": "^5.12.8",
+    "ws": "^8.23.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.23.15",
+    "vitest": "^5.1.1"
+  }
+}
