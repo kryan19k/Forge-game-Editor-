@@ -48,6 +48,8 @@ The team feed shows committed scene activity as entities are added, deleted, ren
 
 Open **Assets** to preview reusable prefab subtrees, save a selection, or place an instance at the viewport's ground point. **Describe an asset** sends a directive to #team. MCP agents create and place prefabs with `forge_prefab_create` and `forge_prefab_place`.
 
+In **Assets → Generated models**, add a Tripo API key, submit a prompt, and review the rendered GLB before placing it. Generation uses Tripo credits. Placed models use a box collider fitted to the mesh bounds. The daemon stores the key in `workspace/secrets.json` and keeps each generated version under its own asset ID. Agents can list versions and place approved models with `forge_assets` and `forge_asset_place`.
+
 `W/E/R` move/rotate/scale · `Q` world/local · `X` snap · `F` frame (`Shift F` all) · `Ctrl D` duplicate · `Del` delete · `L` lock from agents · `H` hide · `F2` rename · `Ctrl Z / Ctrl ⇧ Z` undo/redo · `Ctrl K` command palette (type anything else to direct the crew). Drag any number field to scrub; click to type.
 
 ## Play mode

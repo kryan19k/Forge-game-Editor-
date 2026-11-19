@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { send, submit, toast, useStudio } from '../state/store';
 import { viewportApi } from '../viewport/api';
 import { createPrefabPreview } from '../viewport/PrefabPreview';
+import { GeneratedAssets } from './GeneratedAssets';
 
 const EMPTY_PREFABS: Record<string, Prefab> = {};
 const EMPTY_REVISIONS: Record<string, number> = {};
@@ -22,7 +23,8 @@ function useThumbnails(prefabs: Record<string, Prefab>, revisions: Record<string
       try {
         for (const [id, prefab] of queue) {
           if (stopped) break;
-          const url = renderer.render(prefab);
+          const url = await renderer.render(prefab);
+          if (stopped) break;
           cached.current.set(id, { revision: revisions[id] ?? 0, url });
           setPreviews(new Map(cached.current));
           await new Promise<void>((done) => requestAnimationFrame(() => done()));
@@ -46,6 +48,7 @@ function useThumbnails(prefabs: Record<string, Prefab>, revisions: Record<string
 
 export function AssetsPanel() {
   const scene = useStudio((state) => state.scene);
+  const projectId = useStudio((state) => state.project?.projectId);
   const selection = useStudio((state) => state.selection);
   const online = useStudio((state) => state.conn === 'online');
   const prefabs = scene?.database.prefabs ?? EMPTY_PREFABS;
@@ -55,6 +58,7 @@ export function AssetsPanel() {
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [form, setForm] = useState<'save' | 'describe' | null>(null);
   const [draft, setDraft] = useState('');
+  const [generated, setGenerated] = useState(false);
   const prefab = prefabs[active];
 
   const save = () => {
@@ -87,6 +91,11 @@ export function AssetsPanel() {
         <span className="code">02</span><span className="title">Assets</span><span className="spacer" />
         <button className="btn" onClick={() => useStudio.setState({ assetsOpen: false })}>Inspector</button>
       </div>
+      <div className="team-threads" role="group" aria-label="Asset types">
+        <button className="team-thread micro" aria-pressed={!generated} onClick={() => setGenerated(false)}>Prefabs</button>
+        <button className="team-thread micro" aria-pressed={generated} onClick={() => setGenerated(true)}>Generated models</button>
+      </div>
+      {generated ? projectId && <GeneratedAssets projectId={projectId} online={online} /> : <>
       <div className="asset-tools">
         <button className="btn" disabled={!online || !selection.length} onClick={() => { setForm('save'); setDraft(''); }}>Save selection</button>
         <button className="btn" disabled={!online} onClick={() => { setForm('describe'); setDraft(''); }}>Describe an asset…</button>
@@ -135,6 +144,7 @@ export function AssetsPanel() {
           }}>Place at view</button>
         </div>}
       </div>
+      </>}
     </section>
   );
 }

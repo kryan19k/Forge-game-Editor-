@@ -34,7 +34,7 @@ export const Prefab = z.object({ name: PrefabName, entities: PrefabEntities, par
     const binding = `${parameter.entityId}/${parameter.kind}`;
     if (ids.has(parameter.id)) issues(`Duplicate prefab parameter ${parameter.id}`);
     if (bindings.has(binding)) issues(`Duplicate prefab parameter binding ${binding}`);
-    if (!target || (parameter.kind === 'albedo' && !target.components.mesh)) issues(`Invalid target for parameter ${parameter.id}`);
+    if (!target || (parameter.kind === 'albedo' && (!target.components.mesh || target.components.mesh.asset))) issues(`Invalid target for parameter ${parameter.id}`);
     ids.add(parameter.id);
     bindings.add(binding);
   }

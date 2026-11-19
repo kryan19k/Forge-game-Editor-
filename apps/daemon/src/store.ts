@@ -67,6 +67,7 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
   private historyWrites = Promise.resolve();
   private readonly dir: string;
   activitySettings: ActivitySettings;
+  isAssetApproved: (id: string) => boolean = () => false;
 
   /**
    * @param initial a pre-built scene (genre starters); otherwise the template seeds it.
@@ -102,6 +103,17 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
     const result = applyTransaction(this.scene, txInput);
     if (!result.ok) return result;
     const { tx } = result;
+    const references = result.touched.flatMap((id) => {
+      const asset = result.scene.entities[id]?.components.mesh?.asset;
+      return asset && asset !== this.scene.entities[id]?.components.mesh?.asset ? [asset] : [];
+    });
+    for (const mutation of tx.mutations) {
+      if (mutation.op !== 'set_prefab') continue;
+      const prefab = result.scene.database.prefabs[mutation.prefabId];
+      for (const entity of prefab?.entities ?? []) if (entity.components.mesh?.asset) references.push(entity.components.mesh.asset);
+    }
+    const unavailable = [...new Set(references)].find((id) => !this.isAssetApproved(id));
+    if (unavailable) return { ok: false, error: { code: 'INVALID', message: 'Model is unavailable or requires approval: ' + unavailable } };
     const changes = describeSceneChanges(this.scene, result.scene, result.touched);
     this.scene = result.scene;
     const entry: HistoryEntry = {

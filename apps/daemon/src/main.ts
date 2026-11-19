@@ -1,6 +1,7 @@
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ProjectHub } from './hub';
+import { ModelAssets } from './model-assets';
 import { Producer } from './producer';
 import { createServer } from './server';
 
@@ -11,7 +12,9 @@ const host = '127.0.0.1';
 
 const hub = new ProjectHub(workspace, process.env.FORGE_TEMPLATE ?? 'outpost-zero');
 const producer = new Producer(join(workspace, 'secrets.json'));
-const app = await createServer(hub, { port, host }, producer);
+const assets = new ModelAssets(workspace);
+for (const { projectId } of hub.list().projects) assets.resume(projectId);
+const app = await createServer(hub, { port, host }, producer, assets);
 setInterval(() => hub.sweep(), 10_000).unref();
 
 await app.listen({ port, host });

@@ -1,5 +1,6 @@
 import type { Entity, EntityId, Environment, SceneDoc, Shape } from '@forge/contracts';
 import * as THREE from 'three';
+import { assetModelUrl, loadAssetModel } from './asset-model';
 
 const DEG = Math.PI / 180;
 
@@ -7,11 +8,12 @@ export interface SceneSyncOptions {
   /** Draw editor-only proxies (light icons, spawn markers, triggers, empties). Never in exported games. */
   editorHelpers?: boolean;
   shadowMapSize?: number;
+  assetUrl?: (id: string) => string;
 }
 
 interface Node {
   group: THREE.Group;
-  mesh?: THREE.Mesh;
+  mesh?: THREE.Object3D;
   light?: THREE.Light;
   helper?: THREE.Object3D;
   sig: { mesh?: string; light?: string; helper?: string };
@@ -27,6 +29,7 @@ export class SceneSync {
   private readonly nodes = new Map<EntityId, Node>();
   private readonly geometries = new Map<Shape, THREE.BufferGeometry>();
   private readonly helperMaterials = new Map<string, THREE.Material>();
+  private readonly loading = new Set<Promise<void>>();
 
   constructor(private readonly opts: SceneSyncOptions = {}) {
     this.root.name = 'forge:root';
@@ -49,6 +52,10 @@ export class SceneSync {
       const parent = (e.parentId && this.nodes.get(e.parentId)?.group) || this.root;
       if (node.group.parent !== parent) parent.add(node.group);
     }
+  }
+
+  async assetsReady(): Promise<void> {
+    await Promise.all(this.loading);
   }
 
   object(id: EntityId): THREE.Object3D | undefined {
@@ -107,7 +114,9 @@ export class SceneSync {
 
     const meshSig = e.components.mesh ? JSON.stringify(e.components.mesh) : undefined;
     if (meshSig !== node.sig.mesh) {
-      this.replace(node, 'mesh', e.components.mesh ? this.buildMesh(e.components.mesh) : undefined);
+      const mesh = e.components.mesh;
+      const object = mesh?.asset ? this.buildAsset(node, mesh, mesh.asset) : mesh ? this.buildMesh(mesh) : undefined;
+      this.replace(node, 'mesh', object);
       node.sig.mesh = meshSig;
     }
 
@@ -145,6 +154,7 @@ export class SceneSync {
   private disposeParts(node: Node): void {
     if (node.mesh) disposeObject(node.mesh);
     if (node.light) disposeObject(node.light);
+    node.mesh = undefined;
   }
 
   private geometry(shape: Shape): THREE.BufferGeometry {
@@ -195,6 +205,29 @@ export class SceneSync {
     mesh.castShadow = c.castShadow;
     mesh.receiveShadow = c.receiveShadow;
     return mesh;
+  }
+
+  private buildAsset(node: Node, mesh: NonNullable<Entity['components']['mesh']>, asset: string): THREE.Group {
+    const group = new THREE.Group();
+    group.scale.set(...mesh.size);
+    const url = this.opts.assetUrl?.(asset) ?? assetModelUrl(asset);
+    const loading = loadAssetModel(url).then((model) => {
+      if (node.mesh !== group) {
+        disposeObject(model);
+        return;
+      }
+      model.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.castShadow = mesh.castShadow;
+          object.receiveShadow = mesh.receiveShadow;
+        }
+      });
+      group.add(model);
+    }).catch((error: unknown) => {
+      console.warn('FORGE could not load model ' + asset, error);
+    }).finally(() => this.loading.delete(loading));
+    this.loading.add(loading);
+    return group;
   }
 
   private buildLight(c: NonNullable<Entity['components']['light']>): THREE.Light {
@@ -280,14 +313,28 @@ export class SceneSync {
 }
 
 function disposeObject(obj: THREE.Object3D): void {
+  const materials = new Set<THREE.Material>();
+  const textures = new Set<THREE.Texture>();
+  const geometry = new Set<THREE.BufferGeometry>();
   obj.traverse((o) => {
     if (o instanceof THREE.Mesh) {
-      if (!o.userData.sharedGeometry) o.geometry.dispose();
+      if (!o.userData.sharedGeometry) geometry.add(o.geometry);
       const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of mats) m.dispose();
+      for (const m of mats) materials.add(m);
     }
     if (o instanceof THREE.Light) o.dispose();
   });
+  for (const g of geometry) g.dispose();
+  for (const m of materials) {
+    for (const value of Object.values(m)) if (value instanceof THREE.Texture) textures.add(value);
+    m.dispose();
+  }
+  const images = new Set<ImageBitmap>();
+  for (const texture of textures) {
+    if (typeof ImageBitmap !== 'undefined' && texture.image instanceof ImageBitmap) images.add(texture.image);
+    texture.dispose();
+  }
+  for (const image of images) image.close();
 }
 
 export function applyEnvironment(scene: THREE.Scene, renderer: { toneMapping: THREE.ToneMapping; toneMappingExposure: number }, env: Environment): void {

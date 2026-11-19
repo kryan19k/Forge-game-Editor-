@@ -10,3 +10,4 @@ export * from './design';
 export * from './activity';
 export * from './team';
 export * from './prefab';
+export * from './assets';

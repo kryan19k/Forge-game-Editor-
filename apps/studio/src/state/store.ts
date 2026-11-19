@@ -190,7 +190,7 @@ function handle(msg: ServerMessage): void {
     case 'team.rejected':
       toast('error', 'Team Room', msg.message);
       return;
-    case 'prefab.placed':
+    case 'entity.placed':
       if (get().scene?.entities[msg.rootId]) select([msg.rootId]);
       return;
     case 'brief':

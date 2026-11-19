@@ -7,7 +7,7 @@ const v3 = (v: readonly number[]) => v.map(fmt).join(',');
 export function describeComponents(e: Entity): string {
   const c = e.components;
   const parts: string[] = [];
-  if (c.mesh) parts.push(`mesh:${c.mesh.shape} ${v3(c.mesh.size)} ${c.mesh.material.color}`);
+  if (c.mesh) parts.push(c.mesh.asset ? `mesh:${c.mesh.asset} ${v3(c.mesh.size)}` : `mesh:${c.mesh.shape} ${v3(c.mesh.size)} ${c.mesh.material.color}`);
   if (c.light) parts.push(`light:${c.light.kind} ${c.light.color} i=${fmt(c.light.intensity)}`);
   if (c.collider) parts.push(`collider:${c.collider.shape}${c.collider.isTrigger ? ' trigger' : ''}`);
   if (c.rigidBody) parts.push(`body:${c.rigidBody.kind}`);

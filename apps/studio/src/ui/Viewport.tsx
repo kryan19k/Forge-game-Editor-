@@ -41,9 +41,9 @@ export function Viewport() {
       if (s.crew !== prev.crew || s.selection !== prev.selection || s.scene !== prev.scene) vp.setBeacons(beaconsFor(s));
     });
 
-    onCaptureRequest((req) => {
+    onCaptureRequest(async (req) => {
       try {
-        const dataUrl = vp.capture(req.view, req.helpers, req.width, req.height);
+        const dataUrl = await vp.capture(req.view, req.helpers, req.width, req.height);
         send({ type: 'capture.response', requestId: req.requestId, dataUrl });
         useStudio.setState({ shutter: { at: Date.now(), label: `${req.by.name} captured · ${req.view}`, color: req.by.color } });
       } catch (err) {

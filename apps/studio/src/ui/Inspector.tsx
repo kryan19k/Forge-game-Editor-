@@ -327,7 +327,12 @@ export function Inspector() {
                   <Glyph.close />
                 </button>
               </div>
-              <div className="module-body">{mod.fields(v).map((f) => renderField(e, name, f, v))}</div>
+              <div className="module-body">
+                {name === 'mesh' && e.components.mesh?.asset && <div className="field"><label>GLB model</label><span className="mono">{e.components.mesh.asset}</span></div>}
+                {mod.fields(v)
+                  .filter((f) => name !== 'mesh' || !e.components.mesh?.asset || f.path === 'castShadow' || f.path === 'receiveShadow')
+                  .map((f) => renderField(e, name, f, v))}
+              </div>
             </section>
           );
         })}

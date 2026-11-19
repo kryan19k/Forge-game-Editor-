@@ -6,7 +6,7 @@
  * in the Studio as it happens.
  */
 import {
-  ActivityCursor, AgentStatus, CaptureView, ComponentName, DirectiveStatus, EntityId, Mutation, PlanSteps,
+  ActivityCursor, AgentStatus, AssetPlacement, CaptureView, ComponentName, DirectiveStatus, EntityId, Mutation, PlanSteps,
   PlaytestStep, PublishedKind, TeamFocus, TeamInboxCursor, TeamPostKind, TeamTarget, TeamText,
   PrefabCreate, PrefabPlace,
 } from '@forge/contracts';
@@ -410,6 +410,30 @@ server.registerTool(
   },
   async (args) => {
     const result = await call<{ ok: boolean; error?: unknown }>('POST', '/api/prefabs/place', args);
+    return result.ok ? text(result) : errorText(JSON.stringify(result.error));
+  },
+);
+
+server.registerTool(
+  'forge_assets',
+  {
+    title: 'Read generated model versions',
+    description: 'List generated models and their validation, approval, credits when reported and immutable asset IDs in the active project.',
+    inputSchema: {},
+    annotations: { readOnlyHint: true },
+  },
+  async () => text(await call('GET', '/api/assets')),
+);
+
+server.registerTool(
+  'forge_asset_place',
+  {
+    title: 'Place an approved GLB model',
+    description: 'Place an approved model at a ground position with a bounds-based static collider. meters is the longest model axis.',
+    inputSchema: AssetPlacement.shape,
+  },
+  async (args) => {
+    const result = await call<{ ok: boolean; error?: unknown }>('POST', '/api/assets/place', args);
     return result.ok ? text(result) : errorText(JSON.stringify(result.error));
   },
 );

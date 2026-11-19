@@ -17,6 +17,7 @@
     "@forge/game-runtime": "workspace:*",
     "@forge/scene": "workspace:*",
     "@forge/templates": "workspace:*",
+    "@gltf-transform/core": "^4.5.1",
     "fastify": "^5.12.8",
     "ws": "^8.23.0",
     "zod": "^4.6.7"

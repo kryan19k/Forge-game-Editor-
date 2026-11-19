@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Color, DatabaseId, Vec3 } from './primitives';
+import { AssetId } from './assets';
 
 /**
  * Components are a closed, typed set. Agents and humans may only attach
@@ -28,14 +29,17 @@ export const Material = z.object({
 });
 export type Material = z.output<typeof Material>;
 
-export const MeshComponent = z.object({
-  shape: Shape,
-  /** Dimensions in meters. Unit primitives are scaled by this (diameter for round shapes). */
+const MeshBase = z.object({
+  /** Scales unit primitives or a GLB normalized to one meter on its longest axis. */
   size: Vec3.default([1, 1, 1]),
   material: Material.default(() => Material.parse({})),
   castShadow: z.boolean().default(true),
   receiveShadow: z.boolean().default(true),
 });
+export const MeshComponent = z.union([
+  MeshBase.extend({ shape: z.literal('box').default('box'), asset: AssetId }),
+  MeshBase.extend({ shape: Shape, asset: z.never().optional() }),
+]);
 
 export const LightComponent = z.object({
   kind: z.enum(['directional', 'point', 'spot', 'hemisphere']),

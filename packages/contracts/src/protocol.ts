@@ -4,6 +4,7 @@ import { EntityId } from './primitives';
 import type { DesignBrief } from './design';
 import type { SceneDoc } from './scene';
 import { ActivitySettings, type SceneActivity } from './activity';
+import { AssetPlacement } from './assets';
 import { PrefabPlace } from './prefab';
 import { TeamAgentId, TeamFocus, TeamPlanReview, TeamText, TeamThread, type Directive, type TeamEvent, type TeamSnapshot, type TeamThinking } from './team';
 
@@ -81,7 +82,7 @@ export type ServerMessage =
   | { type: 'team.event'; event: TeamEvent }
   | { type: 'team.thinking'; thinking: TeamThinking | null }
   | { type: 'team.rejected'; message: string }
-  | { type: 'prefab.placed'; rootId: EntityId }
+  | { type: 'entity.placed'; rootId: EntityId }
   | { type: 'brief'; brief: DesignBrief | null }
   | {
       type: 'capture.request';
@@ -107,6 +108,7 @@ export const ClientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('team.review'), review: TeamPlanReview }),
   z.object({ type: z.literal('team.pause'), agentId: TeamAgentId, paused: z.boolean() }),
   z.object({ type: z.literal('prefab.place'), request: PrefabPlace }),
+  z.object({ type: z.literal('asset.place'), projectId: z.string(), request: AssetPlacement }),
   z.object({
     type: z.literal('directive.create'),
     text: z.string().trim().min(1).max(2000),

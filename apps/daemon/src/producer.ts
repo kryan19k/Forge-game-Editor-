@@ -1,8 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import type { DesignBrief, StarterInfo } from '@forge/contracts';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { z } from 'zod';
+import { readKey, storeKey } from './secrets';
 
 /**
  * The embedded Producer: turns a design interview into follow-up questions, a game
@@ -44,12 +44,7 @@ export class Producer {
   constructor(private readonly secretsFile: string) {}
 
   private savedKey(): string | null {
-    try {
-      if (!existsSync(this.secretsFile)) return null;
-      return (JSON.parse(readFileSync(this.secretsFile, 'utf8')) as { anthropicApiKey?: string }).anthropicApiKey ?? null;
-    } catch {
-      return null;
-    }
+    return readKey(this.secretsFile, 'anthropicApiKey');
   }
 
   status(): { available: boolean; source: 'saved' | 'environment' | 'unverified' | 'none'; model: string } {
@@ -61,7 +56,7 @@ export class Producer {
   }
 
   setKey(key: string | null): void {
-    writeFileSync(this.secretsFile, JSON.stringify(key ? { anthropicApiKey: key } : {}, null, 2), { mode: 0o600 });
+    storeKey(this.secretsFile, 'anthropicApiKey', key);
     this.authFailed = false;
   }
 

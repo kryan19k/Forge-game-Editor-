@@ -3,6 +3,9 @@ import fastifyWebsocket from '@fastify/websocket';
 import {
   ActivityCursor,
   AgentStatus,
+  AssetGenerate,
+  AssetId,
+  AssetPlacement,
   CaptureView,
   ClientMessage,
   ComponentSchemas,
@@ -31,10 +34,12 @@ import { formatReport, lintDatabase, runPlaytest } from '@forge/game-runtime/sim
 import { describeComponents, outlineScene } from '@forge/scene';
 import Fastify, { type FastifyRequest } from 'fastify';
 import type { WebSocket } from 'ws';
+import { createReadStream } from 'node:fs';
 import { z } from 'zod';
 import { starterInfo, starters, templates } from '@forge/templates';
 import type { Producer } from './producer';
 import type { ProjectHub } from './hub';
+import type { ModelAssets } from './model-assets';
 import { RoomManager } from './rooms';
 import type { ApplyOutcome, ProjectStore } from './store';
 
@@ -49,7 +54,7 @@ function agentFrom(req: FastifyRequest): Author {
 const outcome = (o: ApplyOutcome) =>
   o.ok ? { ok: true, revision: o.entry.revision, txId: o.entry.txId, touched: o.entry.touched } : { ok: false, error: o.error };
 
-export async function createServer(hub: ProjectHub, opts: { port: number; host: string }, producer?: Producer) {
+export async function createServer(hub: ProjectHub, opts: { port: number; host: string }, producer?: Producer, assets?: ModelAssets) {
   /** The active project. Reassigned when the Director or an agent switches projects. */
   let store: ProjectStore = hub.active;
   const app = Fastify({ logger: { level: 'warn' }, bodyLimit: 4 * 1024 * 1024 });
@@ -65,6 +70,10 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
   /* ── Studio realtime channel ─────────────────────────────────────────── */
 
   const sockets = new Set<WebSocket>();
+  const bindAssets = (target: ProjectStore) => {
+    target.isAssetApproved = (id) => assets?.approved(target.project.projectId, id) ?? false;
+  };
+  bindAssets(store);
   const send = (ws: WebSocket, msg: ServerMessage) => ws.readyState === ws.OPEN && ws.send(JSON.stringify(msg));
   const snapshot = (ws: WebSocket) => {
     const you = store.touchCrew(DIRECTOR, { status: 'working' });
@@ -86,6 +95,7 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
   store.hasStudio = () => sockets.size > 0;
   hub.on('switched', (next) => {
     store = next;
+    bindAssets(next);
     store.hasStudio = () => sockets.size > 0;
     for (const ws of sockets) snapshot(ws);
   });
@@ -143,7 +153,20 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
         case 'prefab.place': {
           const placed = store.placePrefab(DIRECTOR, msg.request);
           reject('', placed);
-          if (placed.ok && placed.rootId) send(socket, { type: 'prefab.placed', rootId: placed.rootId });
+          if (placed.ok && placed.rootId) send(socket, { type: 'entity.placed', rootId: placed.rootId });
+          return;
+        }
+        case 'asset.place': {
+          if (msg.projectId !== store.project.projectId) return send(socket, { type: 'tx.rejected', txId: '', code: 'SCENE_MISMATCH', message: 'The active project changed.' });
+          try {
+            if (!assets) throw new Error('Generated assets are unavailable.');
+            const { name, mutation } = assets.placement(msg.projectId, msg.request);
+            const placed = store.submit(DIRECTOR, 'Place ' + name, [mutation]);
+            reject('', placed);
+            if (placed.ok) send(socket, { type: 'entity.placed', rootId: mutation.entity.id });
+          } catch (error) {
+            send(socket, { type: 'tx.rejected', txId: '', code: 'INVALID', message: (error as Error).message });
+          }
           return;
         }
         case 'directive.create':
@@ -336,6 +359,68 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
     const placed = store.placePrefab(agentFrom(req), body.data);
     return placed.ok ? { ...outcome(placed), rootId: placed.rootId } : outcome(placed);
+  });
+
+  app.get('/api/assets', async () => assets?.list(store.project.projectId) ?? { projectId: store.project.projectId, configured: false, assets: [] });
+
+  app.get('/api/assets/content/:id', async (req, reply) => {
+    const id = AssetId.safeParse((req.params as { id: string }).id);
+    const preview = (req.query as { preview?: string }).preview === '1';
+    const file = id.success && assets?.content(hub.list().projects.map((project) => project.projectId), id.data, preview);
+    if (!file) return reply.code(404).send({ error: 'No model at this version' });
+    return reply.header('Cache-Control', preview ? 'no-store' : 'private, max-age=31536000, immutable')
+      .type('model/gltf-binary').send(createReadStream(file));
+  });
+
+  const directorAssets = (req: FastifyRequest) => !req.headers['x-forge-agent-id'];
+  const matchingProject = (req: FastifyRequest) => {
+    const { projectId } = req.query as { projectId?: string };
+    return projectId === undefined || projectId === store.project.projectId;
+  };
+
+  app.post('/api/assets/key', async (req, reply) => {
+    if (!directorAssets(req)) return reply.code(403).send({ error: 'Agents cannot set credentials' });
+    const body = z.object({ key: z.string().trim().min(12).max(300).nullable() }).safeParse(req.body);
+    if (!assets || !body.success) return reply.code(400).send({ error: 'Invalid Tripo key' });
+    assets.setKey(body.data.key);
+    return { configured: assets.list(store.project.projectId).configured };
+  });
+
+  app.post('/api/assets/generate', async (req, reply) => {
+    if (!directorAssets(req)) return reply.code(403).send({ error: 'The Director starts paid generation from Studio.' });
+    if (!matchingProject(req)) return reply.code(409).send({ error: 'The active project changed.' });
+    const body = AssetGenerate.safeParse(req.body);
+    if (!assets || !body.success) return reply.code(400).send({ error: body.success ? 'Generated assets are unavailable' : z.prettifyError(body.error) });
+    try {
+      return reply.code(202).send(assets.generate(store.project.projectId, body.data));
+    } catch (error) {
+      return reply.code(409).send({ error: (error as Error).message });
+    }
+  });
+
+  app.post('/api/assets/:id/review', async (req, reply) => {
+    if (!directorAssets(req)) return reply.code(403).send({ error: 'Only the Director can review a generated model.' });
+    if (!matchingProject(req)) return reply.code(409).send({ error: 'The active project changed.' });
+    const id = AssetId.safeParse((req.params as { id: string }).id);
+    const body = z.object({ approve: z.boolean() }).safeParse(req.body);
+    if (!assets || !id.success || !body.success) return reply.code(400).send({ error: 'Invalid review' });
+    try {
+      return assets.review(store.project.projectId, id.data, body.data.approve);
+    } catch (error) {
+      return reply.code(409).send({ error: (error as Error).message });
+    }
+  });
+
+  app.post('/api/assets/place', async (req, reply) => {
+    const body = AssetPlacement.safeParse(req.body);
+    if (!assets || !body.success) return reply.code(400).send({ ok: false, error: body.success ? 'Generated assets are unavailable' : z.prettifyError(body.error) });
+    try {
+      const { name, mutation } = assets.placement(store.project.projectId, body.data);
+      const placed = store.submit(agentFrom(req), 'Place ' + name, [mutation]);
+      return placed.ok ? { ...outcome(placed), rootId: mutation.entity.id } : outcome(placed);
+    } catch (error) {
+      return reply.code(409).send({ ok: false, error: (error as Error).message });
+    }
   });
 
   app.get('/api/producer', async () => producer?.status() ?? { available: false, source: 'none' });

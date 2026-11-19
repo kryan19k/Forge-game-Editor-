@@ -49,6 +49,12 @@ When a request needs something none of these express (a new rule, a new controll
 - Call `forge_prefab_create` with `name` and typed `entities`, or omit `entities` to save the Director's selected subtree. Expose variations using `parameters` entries with `id`, `label`, `entityId`, and `kind` (`name` or `albedo`).
 - Use `forge_prefab_place` with the returned `prefabId` as `prefab` and a world `position`. Optional `parameters` maps parameter IDs to strings. Placement creates an independent copy. Use `forge_capture` to inspect it and `forge_playtest` to verify collision or interactions.
 
+### Place generated models
+
+- Ask the Director to generate and approve a model under **Assets → Generated models**. Share the prompt and its intended gameplay use in Team Room. Paid submission and version review happen in Studio.
+- Use `forge_assets` to find the approved version, then `forge_asset_place {asset, position, meters}`. `position` is the ground point and `meters` sets the model's longest axis. Version IDs pin the exact GLB.
+- FORGE fits a box collider from the model bounds. For arches, walkable openings, or irregular surfaces, author separate simple colliders and verify them with a playtest. The GLB retains its authored materials. The pipeline accepts static models, so use the existing runtime actors for animated gameplay.
+
 Meters, Y-up, right-handed; rotations Euler XYZ **degrees**; yaw 0 faces **−Z**, yaw −90 faces +X. Entity ids `ent_lowercase_words` (choose them so one transaction can create parents and children). Def ids `lowercase_snake`. Unit primitives scale by `mesh.size` (diameter for round shapes); a box of height h on the ground sits at `y = h/2`.
 
 ## Efficiency rules (tokens, time, Director attention)

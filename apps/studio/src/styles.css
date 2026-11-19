@@ -493,6 +493,24 @@ input.text:focus { border-color: var(--molten); }
 .asset-details .asset-heading { margin: 0; }
 .asset-parameter { display: grid; grid-template-columns: minmax(60px, 1fr) minmax(36px, 1.2fr); align-items: center; gap: 8px; width: 100%; color: var(--bone-2); }
 .asset-parameter input[type="color"] { width: 38px; height: 24px; padding: 2px; }
+.generated-assets .asset-heading { align-items: center; }
+.generated-assets .asset-heading .btn { height: 23px; padding: 0 6px; }
+.generated-assets .asset-form { padding-inline: 0; }
+.generated-new { margin-bottom: 8px; }
+.generated-versions { display: grid; border-top: 1px solid var(--rule); }
+.generated-version {
+  display: flex; justify-content: space-between; align-items: center; gap: 6px; text-align: left;
+  padding: 7px 6px; border: 0; border-bottom: 1px solid var(--rule); border-left: 1px solid transparent;
+  background: transparent; color: var(--bone-2); cursor: pointer;
+}
+.generated-version[aria-pressed="true"] { color: var(--bone); background: var(--ink-2); border-left-color: var(--molten); }
+.generated-version > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-status { color: var(--amber); white-space: nowrap; }
+.model-status.approved { color: var(--lime); }
+.model-status.failed, .model-status.rejected, .asset-error { color: var(--rose); }
+.asset-error, .generated-prompt { margin: 0; overflow-wrap: anywhere; }
+.generated-preview { width: min(100%, 270px); margin: 0; border: 1px solid var(--rule); }
+.generated-assets a { color: var(--amber); }
 
 /* ── Palette & menus ───────────────────────────────────────────────────── */
 

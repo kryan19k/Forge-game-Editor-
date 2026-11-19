@@ -172,7 +172,8 @@ export class EditorViewport {
   }
 
   /** Agent eyes: render a still from a chosen view and return a PNG data URL. */
-  capture(view: CaptureView, includeHelpers: boolean, width: number, height: number): string {
+  async capture(view: CaptureView, includeHelpers: boolean, width: number, height: number): Promise<string> {
+    await this.sync.assetsReady();
     const { renderer } = this.r;
     const cam = this.camera.clone();
     cam.aspect = width / height;
