@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { DatabaseId as Id } from './primitives';
+import { Prefab, PrefabId } from './prefab';
 
 /**
  * The Game Database — typed, data-driven gameplay definitions that the simulation
@@ -7,8 +9,6 @@ import { z } from 'zod';
  * `upsert_def` / `remove_def` transactions; it is deterministic, so it works in
  * headless playtests and authoritative multiplayer unchanged.
  */
-
-const Id = z.string().regex(/^[a-z0-9_]{1,48}$/, 'ids are lowercase_snake');
 
 /* ── Stats & modifiers ─────────────────────────────────────────────────── */
 
@@ -180,6 +180,8 @@ export const GameDatabase = z.object({
   trees: z.array(TreeDef).max(16).default([]),
   items: z.array(ItemDef).max(512).default([]),
   loot: z.array(LootTable).max(128).default([]),
+  prefabs: z.record(PrefabId, Prefab).default({}),
+  prefabRevisions: z.record(PrefabId, z.number().int().nonnegative()).default({}),
   progression: Progression.default(() => Progression.parse({})),
   loadout: Loadout.default(() => Loadout.parse({})),
 });
@@ -189,12 +191,3 @@ export type GameDatabase = z.output<typeof GameDatabase>;
 export const DefTable = z.enum(['stats', 'abilities', 'statuses', 'trees', 'items', 'loot']);
 export type DefTable = z.infer<typeof DefTable>;
 export const DefSchemas = { stats: StatDef, abilities: AbilityDef, statuses: StatusDef, trees: TreeDef, items: ItemDef, loot: LootTable } as const;
-
-/** Per-entity gameplay profile for NPCs: stat overrides, abilities, loot, XP reward. */
-export const UnitComponent = z.object({
-  stats: z.record(Id, z.number()).default({}),
-  abilities: z.array(Id).max(6).default([]),
-  loot: Id.optional(),
-  xp: z.number().min(0).optional(),
-  level: z.number().int().min(1).max(999).default(1),
-});

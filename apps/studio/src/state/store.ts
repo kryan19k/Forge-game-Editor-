@@ -49,6 +49,7 @@ export interface StudioState {
   shutter: { at: number; label: string; color: string } | null;
   brief: DesignBrief | null;
   designOpen: boolean;
+  assetsOpen: boolean;
 }
 
 export const useStudio = create<StudioState>(() => ({
@@ -75,6 +76,7 @@ export const useStudio = create<StudioState>(() => ({
   shutter: null,
   brief: null,
   designOpen: false,
+  assetsOpen: false,
 }));
 
 const set = useStudio.setState;
@@ -187,6 +189,9 @@ function handle(msg: ServerMessage): void {
       return;
     case 'team.rejected':
       toast('error', 'Team Room', msg.message);
+      return;
+    case 'prefab.placed':
+      if (get().scene?.entities[msg.rootId]) select([msg.rootId]);
       return;
     case 'brief':
       set({ brief: msg.brief });

@@ -32,7 +32,7 @@ export class SceneSync {
     this.root.name = 'forge:root';
   }
 
-  sync(doc: SceneDoc): void {
+  sync(doc: Pick<SceneDoc, 'entities'>): void {
     const seen = new Set<EntityId>();
     for (const e of Object.values(doc.entities)) {
       seen.add(e.id);

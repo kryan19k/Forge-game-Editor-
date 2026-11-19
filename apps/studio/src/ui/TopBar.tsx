@@ -12,6 +12,7 @@ export function TopBar() {
   const mode = usePlay((s) => s.mode);
   const room = usePlay((s) => s.room);
   const brief = useStudio((s) => s.brief);
+  const assetsOpen = useStudio((s) => s.assetsOpen);
   const pending = brief?.followUps.filter((f) => !f.answer).length ?? 0;
   const hot = crew.some((c) => c.kind === 'agent' && c.status === 'working');
 
@@ -59,6 +60,9 @@ export function TopBar() {
         </span>
       </div>
       <div className="top-actions">
+        <button className={'btn' + (assetsOpen ? ' attn' : '')} aria-pressed={assetsOpen} onClick={() => useStudio.setState({ assetsOpen: !assetsOpen })}>
+          Assets
+        </button>
         {brief && (
           <button className={`btn${pending ? ' attn' : ''}`} onClick={() => useStudio.setState({ designOpen: true })} title="Design brief, Producer questions and build plan">
             Design {pending > 0 && <b className="badge">{pending}</b>}

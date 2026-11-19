@@ -467,6 +467,32 @@ input.text:focus { border-color: var(--molten); }
   border: 1px solid var(--rule-hi); border-radius: 0; background: var(--ink-0); color: var(--bone); font: inherit;
 }
 .team-compose textarea:focus, .team-step-edit textarea:focus { border-color: var(--molten); }
+.assets-panel .panel-head .btn { height: 20px; padding: 0 6px; }
+.asset-tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 9px 12px; border-bottom: 1px solid var(--rule); }
+.asset-tools .btn, .asset-details .btn { height: 25px; padding: 0 8px; }
+.asset-form { display: grid; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--rule); }
+.asset-form input, .asset-form textarea, .asset-parameter input {
+  min-width: 0; padding: 6px 8px; border: 1px solid var(--rule-hi); border-radius: 0;
+  background: var(--ink-0); color: var(--bone); font: inherit;
+}
+.asset-form textarea { resize: vertical; min-height: 55px; }
+.asset-scroll { overflow: auto; min-height: 0; flex: 1; padding: 10px 12px; }
+.asset-heading { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: var(--bone-2); }
+.asset-empty { margin: 0; color: var(--bone-3); }
+.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(122px, 1fr)); gap: 7px; }
+.asset-tile {
+  min-width: 0; padding: 0 0 7px; border: 1px solid var(--rule-hi); display: grid; text-align: left;
+  color: var(--bone); background: var(--ink-2); cursor: pointer;
+}
+.asset-tile:hover, .asset-tile[aria-pressed="true"] { border-color: var(--molten); }
+.asset-thumb { display: grid; place-items: center; aspect-ratio: 1.6; background: var(--ink-0); color: var(--bone-3); margin-bottom: 6px; }
+.asset-thumb img { display: block; width: 100%; }
+.asset-name, .asset-count { margin: 0 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asset-count { color: var(--bone-3); }
+.asset-details { display: grid; justify-items: start; gap: 7px; padding: 10px 0 3px; margin-top: 10px; border-top: 1px solid var(--rule); }
+.asset-details .asset-heading { margin: 0; }
+.asset-parameter { display: grid; grid-template-columns: minmax(60px, 1fr) minmax(36px, 1.2fr); align-items: center; gap: 8px; width: 100%; color: var(--bone-2); }
+.asset-parameter input[type="color"] { width: 38px; height: 24px; padding: 2px; }
 
 /* ── Palette & menus ───────────────────────────────────────────────────── */
 

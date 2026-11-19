@@ -42,6 +42,13 @@ When a request needs something none of these express (a new rule, a new controll
 
 ## Conventions
 
+### Compose reusable prefabs
+
+- Use a single root at the model's placement pivot, typically the center of its footprint at ground level. Parent the parts to that root and use local positions and rotations for each part.
+- Establish a readable silhouette with a few large shapes before adding trim. Use a restrained set of material colors and reserve emissive accents for details that carry meaning. Author collision on the parts players touch and avoid per-detail colliders.
+- Call `forge_prefab_create` with `name` and typed `entities`, or omit `entities` to save the Director's selected subtree. Expose variations using `parameters` entries with `id`, `label`, `entityId`, and `kind` (`name` or `albedo`).
+- Use `forge_prefab_place` with the returned `prefabId` as `prefab` and a world `position`. Optional `parameters` maps parameter IDs to strings. Placement creates an independent copy. Use `forge_capture` to inspect it and `forge_playtest` to verify collision or interactions.
+
 Meters, Y-up, right-handed; rotations Euler XYZ **degrees**; yaw 0 faces **−Z**, yaw −90 faces +X. Entity ids `ent_lowercase_words` (choose them so one transaction can create parents and children). Def ids `lowercase_snake`. Unit primitives scale by `mesh.size` (diameter for round shapes); a box of height h on the ground sits at `y = h/2`.
 
 ## Efficiency rules (tokens, time, Director attention)

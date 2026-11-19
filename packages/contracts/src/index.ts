@@ -9,3 +9,4 @@ export * from './database';
 export * from './design';
 export * from './activity';
 export * from './team';
+export * from './prefab';

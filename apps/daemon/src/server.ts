@@ -12,6 +12,8 @@ import {
   Mutation,
   PlaytestScript,
   PlanSteps,
+  PrefabCreate,
+  PrefabPlace,
   PublishedKind,
   TEAM_THREAD,
   TeamAgentId,
@@ -138,6 +140,12 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
             send(socket, { type: 'team.rejected', message: (error as Error).message });
           }
           return;
+        case 'prefab.place': {
+          const placed = store.placePrefab(DIRECTOR, msg.request);
+          reject('', placed);
+          if (placed.ok && placed.rootId) send(socket, { type: 'prefab.placed', rootId: placed.rootId });
+          return;
+        }
         case 'directive.create':
           store.createDirective(DIRECTOR, msg.text, msg.focusEntityIds);
           return;
@@ -311,6 +319,24 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
   });
 
   app.get('/api/database', async () => ({ revision: store.scene.revision, database: store.scene.database, lint: lintDatabase(store.scene.database) }));
+
+  app.get('/api/prefabs', async () => ({
+    revision: store.scene.revision, prefabs: store.scene.database.prefabs,
+  }));
+
+  app.post('/api/prefabs', async (req, reply) => {
+    const body = PrefabCreate.safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
+    const created = store.createPrefab(agentFrom(req), body.data);
+    return created.ok ? { ...outcome(created), prefabId: created.prefabId } : outcome(created);
+  });
+
+  app.post('/api/prefabs/place', async (req, reply) => {
+    const body = PrefabPlace.safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
+    const placed = store.placePrefab(agentFrom(req), body.data);
+    return placed.ok ? { ...outcome(placed), rootId: placed.rootId } : outcome(placed);
+  });
 
   app.get('/api/producer', async () => producer?.status() ?? { available: false, source: 'none' });
 

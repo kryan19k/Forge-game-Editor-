@@ -9,6 +9,8 @@ export const EntityId = z
   .regex(/^ent_[a-z0-9_]{1,48}$/, 'entity ids look like ent_lowercase_words');
 export type EntityId = z.infer<typeof EntityId>;
 
+export const DatabaseId = z.string().regex(/^[a-z0-9_]{1,48}$/, 'ids are lowercase_snake');
+
 /** Isomorphic (browser + Node 19+) without pulling DOM or Node typings into contracts. */
 const uuid = (): string => (globalThis as unknown as { crypto: { randomUUID(): string } }).crypto.randomUUID();
 

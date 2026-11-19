@@ -27,6 +27,7 @@ interface Ctx {
   scene: SceneDoc;
   touched: Set<EntityId>;
   created: Set<EntityId>;
+  touchedPrefabs: Set<string>;
 }
 
 class MutationError extends Error {
@@ -57,7 +58,7 @@ export function applyTransaction(scene: SceneDoc, input: unknown): TxResult {
     return fail('STALE_REVISION', `baseRevision ${tx.baseRevision} is ahead of scene revision ${scene.revision}`);
 
   const next = clone(scene);
-  const ctx: Ctx = { tx, scene: next, touched: new Set(), created: new Set() };
+  const ctx: Ctx = { tx, scene: next, touched: new Set(), created: new Set(), touchedPrefabs: new Set() };
   const inverse: Mutation[] = [];
 
   for (const [i, m] of tx.mutations.entries()) {
@@ -77,6 +78,7 @@ export function applyTransaction(scene: SceneDoc, input: unknown): TxResult {
     const e = next.entities[id];
     if (e) e.rev = next.revision;
   }
+  for (const id of ctx.touchedPrefabs) next.database.prefabRevisions[id] = next.revision;
   return { ok: true, scene: next, inverse, touched: [...ctx.touched], tx };
 }
 
@@ -229,6 +231,21 @@ function applyMutation(ctx: Ctx, m: Mutation): Mutation[] {
       if (!next.success) throw new MutationError('INVALID', `database: ${z.prettifyError(next.error)}`);
       scene.database = next.data;
       return [{ op: 'set_database', patch: prev as unknown as { progression: Record<string, unknown>; loadout: Record<string, unknown> } }];
+    }
+
+    case 'set_prefab': {
+      const { prefabs, prefabRevisions } = scene.database;
+      const lastChanged = Object.hasOwn(prefabRevisions, m.prefabId) ? prefabRevisions[m.prefabId]! : 0;
+      if (lastChanged > ctx.tx.baseRevision) throw new MutationError('CONFLICT', `prefab ${m.prefabId} changed at revision ${lastChanged}`);
+      const previous = Object.hasOwn(prefabs, m.prefabId) ? prefabs[m.prefabId]! : null;
+      if (m.value === null) {
+        if (previous === null) throw new MutationError('NOT_FOUND', `no prefab ${m.prefabId}`);
+        delete prefabs[m.prefabId];
+      } else {
+        prefabs[m.prefabId] = m.value;
+      }
+      ctx.touchedPrefabs.add(m.prefabId);
+      return [{ op: 'set_prefab', prefabId: m.prefabId, value: previous }];
     }
 
     case 'set_game': {

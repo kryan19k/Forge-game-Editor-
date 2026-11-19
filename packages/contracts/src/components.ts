@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { Color, Vec3 } from './primitives';
-import { UnitComponent } from './database';
+import { Color, DatabaseId, Vec3 } from './primitives';
 
 /**
  * Components are a closed, typed set. Agents and humans may only attach
@@ -8,6 +7,15 @@ import { UnitComponent } from './database';
  */
 
 export const Shape = z.enum(['box', 'sphere', 'cylinder', 'capsule', 'cone', 'torus', 'plane']);
+
+/** Per-entity gameplay profile for NPCs. */
+export const UnitComponent = z.object({
+  stats: z.record(DatabaseId, z.number()).default({}),
+  abilities: z.array(DatabaseId).max(6).default([]),
+  loot: DatabaseId.optional(),
+  xp: z.number().min(0).optional(),
+  level: z.number().int().min(1).max(999).default(1),
+});
 export type Shape = z.infer<typeof Shape>;
 
 export const Material = z.object({

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ComponentName } from './components';
 import { DefTable } from './database';
 import { EntityId, Vec3 } from './primitives';
+import { Prefab, PrefabId } from './prefab';
 import { Entity, Environment } from './scene';
 
 /**
@@ -81,6 +82,7 @@ export const Mutation = z.discriminatedUnion('op', [
     /** Deep-merged into database.progression / database.loadout (arrays replaced). */
     patch: z.object({ progression: z.record(z.string(), z.unknown()).optional(), loadout: z.record(z.string(), z.unknown()).optional() }),
   }),
+  z.object({ op: z.literal('set_prefab'), prefabId: PrefabId, value: Prefab.nullable() }),
   z.object({
     op: z.literal('set_game'),
     /** Deep-merged into game settings (arrays such as objectives are replaced), then validated. */

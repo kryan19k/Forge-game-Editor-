@@ -4,6 +4,7 @@ export * from './graph';
 export * from './reducer';
 export * from './outline';
 export * from './activity';
+export * from './prefab';
 
 export function buildTransaction(
   scene: Pick<SceneDoc, 'sceneId' | 'revision'>,

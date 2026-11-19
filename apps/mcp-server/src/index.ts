@@ -8,6 +8,7 @@
 import {
   ActivityCursor, AgentStatus, CaptureView, ComponentName, DirectiveStatus, EntityId, Mutation, PlanSteps,
   PlaytestStep, PublishedKind, TeamFocus, TeamInboxCursor, TeamPostKind, TeamTarget, TeamText,
+  PrefabCreate, PrefabPlace,
 } from '@forge/contracts';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -374,6 +375,43 @@ server.registerTool(
     annotations: { readOnlyHint: true },
   },
   async () => text(await call('GET', '/api/database')),
+);
+
+server.registerTool(
+  'forge_prefabs',
+  {
+    title: 'Read the prefab library',
+    description: 'List reusable entity subtrees in the active project, including local entity IDs, parameter bindings and the scene revision.',
+    inputSchema: {},
+    annotations: { readOnlyHint: true },
+  },
+  async () => text(await call('GET', '/api/prefabs')),
+);
+
+server.registerTool(
+  'forge_prefab_create',
+  {
+    title: 'Save a prefab',
+    description: 'Save a reusable subtree from typed entity definitions, or omit entities to use the Director’s selected subtree. Parameters can bind an entity name or mesh albedo.',
+    inputSchema: PrefabCreate.shape,
+  },
+  async (args) => {
+    const result = await call<{ ok: boolean; error?: unknown }>('POST', '/api/prefabs', args);
+    return result.ok ? text(result) : errorText(JSON.stringify(result.error));
+  },
+);
+
+server.registerTool(
+  'forge_prefab_place',
+  {
+    title: 'Place a prefab',
+    description: 'Place the named prefab ID in the scene at a world position in meters. Optional parameters override exposed name and albedo bindings. Placement creates fresh entity IDs in one undoable transaction.',
+    inputSchema: PrefabPlace.shape,
+  },
+  async (args) => {
+    const result = await call<{ ok: boolean; error?: unknown }>('POST', '/api/prefabs/place', args);
+    return result.ok ? text(result) : errorText(JSON.stringify(result.error));
+  },
 );
 
 server.registerTool(

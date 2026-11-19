@@ -12,6 +12,7 @@ import {
 } from '@forge/game-runtime';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { capturePng } from './capture';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
 const RAD = 180 / Math.PI;
@@ -194,17 +195,12 @@ export class EditorViewport {
         if (o.userData.helper && o.visible) (o.visible = false), hidden.push(o);
       });
     }
-    const prevSize = renderer.getSize(new THREE.Vector2());
-    const prevRatio = renderer.getPixelRatio();
-    renderer.setPixelRatio(1);
-    renderer.setSize(width, height, false);
-    renderer.render(this.scene, cam);
-    const url = renderer.domElement.toDataURL('image/png');
-    renderer.setPixelRatio(prevRatio);
-    renderer.setSize(prevSize.x, prevSize.y, false);
-    for (const o of hidden) o.visible = true;
-    renderer.render(this.scene, this.camera);
-    return url;
+    try {
+      return capturePng(renderer, this.scene, cam, width, height);
+    } finally {
+      for (const o of hidden) o.visible = true;
+      renderer.render(this.scene, this.camera);
+    }
   }
 
   dispose(): void {

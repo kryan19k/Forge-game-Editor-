@@ -1,5 +1,6 @@
 import {
   ActivitySettings,
+  Prefab,
   SceneActivity,
   SceneDoc,
   TEAM_THREAD,
@@ -17,12 +18,14 @@ import {
   type Mutation,
   type MutationInput,
   type ProjectInfo,
+  type PrefabCreate,
+  type PrefabPlace,
   type ServerMessage,
   type Transaction,
   type TeamThinking,
   type TxError,
 } from '@forge/contracts';
-import { applyTransaction, buildTransaction, describeSceneChanges } from '@forge/scene';
+import { applyTransaction, buildTransaction, describeSceneChanges, instantiatePrefab, prefabFromSelection } from '@forge/scene';
 import { projectFromTemplate } from '@forge/templates';
 import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -141,6 +144,33 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
     return this.apply(buildTransaction(this.scene, author, label, mutations, baseRevision === undefined ? {} : { baseRevision }));
   }
 
+  createPrefab(author: Author, request: PrefabCreate): ApplyOutcome & { prefabId?: string } {
+    try {
+      const { name, parameters, entities } = request;
+      const value = entities ? Prefab.parse({ name, entities, parameters }) : prefabFromSelection(this.scene, this.humanSelection, name, parameters);
+      const prefabId = newId('prefab');
+      return { ...this.submit(author, `Save prefab ${name}`, [{ op: 'set_prefab', prefabId, value }]), prefabId };
+    } catch (error) {
+      return { ok: false, error: { code: 'INVALID', message: (error as Error).message } };
+    }
+  }
+
+  placePrefab(author: Author, request: PrefabPlace): ApplyOutcome & { rootId?: EntityId } {
+    const { prefab, position, parameters, baseRevision } = request;
+    const definition = this.scene.database.prefabs[prefab];
+    if (!definition) return { ok: false, error: { code: 'NOT_FOUND', message: `no prefab ${prefab}` } };
+    if (baseRevision !== undefined && (this.scene.database.prefabRevisions[prefab] ?? 0) > baseRevision) {
+      return { ok: false, error: { code: 'CONFLICT', message: 'The prefab changed. Read its latest definition before placing it.' } };
+    }
+    try {
+      const { rootId, mutations } = instantiatePrefab(definition, position, parameters);
+      const applied = this.submit(author, `Place ${definition.name}`, mutations, baseRevision);
+      return applied.ok ? { ...applied, rootId } : applied;
+    } catch (error) {
+      return { ok: false, error: { code: 'INVALID', message: (error as Error).message } };
+    }
+  }
+
   /** Revert any history entry, refusing if a still-live later change touched the same entities. */
   revert(txId: string, author: Author, label?: string): ApplyOutcome {
     const target = this.records.get(txId);
@@ -202,9 +232,10 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
     return this.applyRevert(target, author, label);
   }
 
-  /** Later entries that still have an effect (revert pairs cancel out) and overlap the target's entities. */
+  /** Later entries that still have an effect (revert pairs cancel out) and overlap the target. */
   private liveLaterChange(target: Record_): Record_ | undefined {
     const touched = new Set(target.entry.touched);
+    const prefabs = new Set(target.tx.mutations.flatMap((m) => m.op === 'set_prefab' ? [m.prefabId] : []));
     const later = this.order
       .map((id) => this.records.get(id)!)
       .filter((r) => r.entry.revision > target.entry.revision)
@@ -219,6 +250,7 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
       }
       if (r.entry.revertOf === target.entry.txId) continue;
       if (r.entry.touched.some((id) => touched.has(id))) return r;
+      if (r.tx.mutations.some((m) => m.op === 'set_prefab' && prefabs.has(m.prefabId))) return r;
     }
     return undefined;
   }
