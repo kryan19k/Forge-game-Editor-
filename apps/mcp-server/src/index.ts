@@ -417,8 +417,8 @@ server.registerTool(
 server.registerTool(
   'forge_assets',
   {
-    title: 'Read generated model versions',
-    description: 'List generated models and their validation, approval, credits when reported and immutable asset IDs in the active project.',
+    title: 'Read model versions',
+    description: 'List imported and generated models and their validation, approval and immutable asset IDs in the active project.',
     inputSchema: {},
     annotations: { readOnlyHint: true },
   },

@@ -1,6 +1,6 @@
 # FORGE — Engineering Handoff
 
-**Date:** 2026-11-19 · **From:** Claude (sessions 1–4) · **Repo:** `C:\Users\Kryan\Desktop\foorge` (own git repo, branch `main`)
+**Date:** 2026-11-19 · **From:** Claude (sessions 1–4) · **Repo:** FORGE (`main`)
 **State at handoff:** `pnpm verify` green — 49 tests (scene 12, templates 5, game-runtime 23, daemon 9), full-workspace typecheck clean, MCP smoke passing, all genres verified in a real browser.
 
 **Phase 6 implementation:** Studio now has scene activity, Team Room, and Assets. See ADRs [004](adr/ADR-004-scene-activity.md), [005](adr/ADR-005-team-room.md), [006](adr/ADR-006-prefab-library.md) and [007](adr/ADR-007-generated-glb-assets.md) for persistence and capability details. The phase requirements below preserve the original acceptance criteria.
@@ -42,7 +42,7 @@ pnpm smoke:mcp           # real MCP server, end-to-end (daemon running, Studio o
   ```toml
   [mcp_servers.forge]
   command = "node"
-  args = ["C:/Users/Kryan/Desktop/foorge/scripts/forge-mcp.mjs"]
+  args = ["/absolute/path/to/forge/scripts/forge-mcp.mjs"]
   env = { FORGE_URL = "http://127.0.0.1:4317", FORGE_AGENT_ID = "codex", FORGE_AGENT_NAME = "Codex" }
   ```
   `scripts/forge-mcp.mjs` works from any working directory (verified). The daemon must be running.

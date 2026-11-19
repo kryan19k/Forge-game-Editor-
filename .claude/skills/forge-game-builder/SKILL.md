@@ -51,7 +51,7 @@ When a request needs something none of these express (a new rule, a new controll
 
 ### Place generated models
 
-- Ask the Director to generate and approve a model under **Assets → Generated models**. Share the prompt and its intended gameplay use in Team Room. Paid submission and version review happen in Studio.
+- The Director can import a self-contained static GLB or generate one with Tripo under **Assets → Models**. Review happens in Studio. For generation, share the prompt and intended gameplay use in Team Room.
 - Use `forge_assets` to find the approved version, then `forge_asset_place {asset, position, meters}`. `position` is the ground point and `meters` sets the model's longest axis. Version IDs pin the exact GLB.
 - FORGE fits a box collider from the model bounds. For arches, walkable openings, or irregular surfaces, author separate simple colliders and verify them with a playtest. The GLB retains its authored materials. The pipeline accepts static models, so use the existing runtime actors for animated gameplay.
 

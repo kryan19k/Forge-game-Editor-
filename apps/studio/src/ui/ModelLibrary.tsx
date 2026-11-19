@@ -1,6 +1,6 @@
 import { Prefab, type AssetLibrary, type AssetRecord } from '@forge/contracts';
 import { assetModelUrl } from '@forge/game-runtime';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { send } from '../state/store';
 import { viewportApi } from '../viewport/api';
 import { createPrefabPreview } from '../viewport/PrefabPreview';
@@ -45,12 +45,12 @@ function ModelPreview({ id }: { id: string }) {
   }, [id]);
   return (
     <div className="asset-thumb generated-preview">
-      {src ? <img src={src} alt="Rendered GLB candidate" /> : <span className="micro">{src === undefined ? 'Rendering…' : 'Preview unavailable'}</span>}
+      {src ? <img src={src} alt="Rendered GLB model" /> : <span className="micro">{src === undefined ? 'Rendering…' : 'Preview unavailable'}</span>}
     </div>
   );
 }
 
-export function GeneratedAssets({ projectId, online }: { projectId: string; online: boolean }) {
+export function ModelLibrary({ projectId, online }: { projectId: string; online: boolean }) {
   const [library, setLibrary] = useState<AssetLibrary | null>(null);
   const [selectedId, setSelectedId] = useState('');
   const [versionOf, setVersionOf] = useState<string>();
@@ -62,6 +62,7 @@ export function GeneratedAssets({ projectId, online }: { projectId: string; onli
   const [meters, setMeters] = useState('2');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
   const query = '?projectId=' + encodeURIComponent(projectId);
   const selected = library?.assets.find((asset) => asset.id === selectedId) ?? library?.assets[0];
   const generating = library?.assets.some((asset) => asset.status === 'queued' || asset.status === 'generating');
@@ -102,6 +103,14 @@ export function GeneratedAssets({ projectId, online }: { projectId: string; onli
     setKey('');
     setShowKey(false);
   });
+  const importFile = (file: File) => action(async () => {
+    const response = await fetch('/api/assets/import' + query + '&fileName=' + encodeURIComponent(file.name), {
+      method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file,
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'The GLB could not be imported.');
+    setSelectedId((result as AssetRecord).id);
+  });
   const begin = (source?: AssetRecord) => {
     setVersionOf(source?.id);
     setModelName(source?.name ?? '');
@@ -114,10 +123,19 @@ export function GeneratedAssets({ projectId, online }: { projectId: string; onli
   return (
     <div className="asset-scroll generated-assets">
       <div className="asset-heading micro">
-        <span>Tripo · Text to 3D</span>
+        <span>Model library</span>
         <button className="btn" disabled={!online || !library} onClick={() => { setShowKey(!showKey); setKey(''); }}>Tripo key</button>
       </div>
-      {library && !library.configured && <p className="asset-empty">Add a Tripo API key here to generate models. FORGE saves it on this machine.</p>}
+      <div className="team-actions generated-new">
+        <input ref={input} type="file" accept=".glb" aria-label="GLB file" hidden onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) void importFile(file);
+        }} />
+        <button className="btn" disabled={!online || busy} onClick={() => input.current?.click()}>Import GLB</button>
+        {library?.configured && !showForm && <button className="btn" disabled={busy || !online || generating} onClick={() => begin()}>Generate with Tripo</button>}
+      </div>
+      {library && !library.configured && <p className="asset-empty">Add a Tripo key to generate models from text.</p>}
       {showKey && <form className="asset-form" onSubmit={(event) => { event.preventDefault(); void configure(key.trim()); }}>
         <input aria-label="Tripo API key" type="password" placeholder="Tripo API key" autoComplete="off" value={key} maxLength={300} onChange={(event) => setKey(event.target.value)} />
         <div className="team-actions">
@@ -125,7 +143,6 @@ export function GeneratedAssets({ projectId, online }: { projectId: string; onli
           {library?.configured && <button className="btn" type="button" disabled={busy || !online} onClick={() => void configure(null)}>Remove key</button>}
         </div>
       </form>}
-      {library?.configured && !showForm && <button className="btn generated-new" disabled={busy || !online || generating} onClick={() => begin()}>New model</button>}
       {showForm && <form className="asset-form" onSubmit={(event) => {
         event.preventDefault();
         void action(async () => {
@@ -144,7 +161,7 @@ export function GeneratedAssets({ projectId, online }: { projectId: string; onli
       </form>}
       {error && <p className="asset-error" role="alert">{error}</p>}
       {library && library.assets.length > 0 && (
-        <div className="generated-versions" aria-label="Generated versions">
+        <div className="generated-versions" aria-label="Model versions">
           {library.assets.map((asset) => (
             <button key={asset.id} className="generated-version" aria-pressed={asset.id === selected?.id} onClick={() => setSelectedId(asset.id)}>
               <span>{asset.name}</span>
@@ -159,7 +176,8 @@ export function GeneratedAssets({ projectId, online }: { projectId: string; onli
         {ready && <ModelPreview key={selected.id} id={selected.id} />}
         {selected.metrics && <div className="micro dim">{selected.metrics.triangles.toLocaleString()} triangles · {(selected.metrics.bytes / 1024).toFixed(1)} KiB</div>}
         {selected.credits !== undefined && <div className="micro dim">{selected.credits} Tripo credits</div>}
-        <p className="generated-prompt">{selected.prompt}</p>
+        {selected.prompt && <p className="generated-prompt">{selected.prompt}</p>}
+        {selected.sourceFile && <p className="generated-prompt dim">{selected.sourceFile}</p>}
         <div className="team-actions">
           {selected.status === 'review' && [true, false].map((approve) => (
             <button className={'btn' + (approve ? ' primary' : '')} key={String(approve)} disabled={!online || busy}
@@ -167,7 +185,7 @@ export function GeneratedAssets({ projectId, online }: { projectId: string; onli
               {approve ? 'Approve model' : 'Reject model'}
             </button>
           ))}
-          {library?.configured && !generating && !showForm && <button className="btn" disabled={!online || busy} onClick={() => begin(selected)}>New version</button>}
+          {selected.provider === 'tripo' && library?.configured && !generating && !showForm && <button className="btn" disabled={!online || busy} onClick={() => begin(selected)}>New version</button>}
         </div>
         {selected.status === 'approved' && <>
           <label className="asset-parameter">Longest axis (m)<input type="number" min="0.1" max="100" step="0.1" value={meters} onChange={(event) => setMeters(event.target.value)} /></label>

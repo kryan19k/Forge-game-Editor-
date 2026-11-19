@@ -6,6 +6,8 @@ Tripo v3 is the first text-to-3D provider. A Director action starts the paid job
 
 Each registry entry stores prompt, provider, model, credits when supplied, a SHA-256 digest and measured geometry. Each version has a separate immutable GLB file. Validation accepts self-contained static triangle meshes within byte, triangle, vertex and texture limits. The Director can preview a candidate and approve or reject it. Only approved versions can be assigned to entities.
 
+Local imports send GLB bytes and a filename to the same validator. The registry stores the filename and local provenance. Imports use the same review and placement controls as Tripo candidates.
+
 Studio and PlaySession use the same GLTFLoader-backed scene reconciler. It centers the model and scales the longest axis to one meter before applying the mesh size. Placement uses a transaction and includes a bounds-based box collider. Headless simulation consumes the typed collider data and has no loader or browser dependency.
 
 [Tripo generation API](https://developers.tripo3d.ai/en/docs/generation-text-to-model/standard) · [Tripo task query API](https://developers.tripo3d.ai/en/docs/task-query)

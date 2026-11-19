@@ -34,6 +34,38 @@ it('validates GLB geometry and counts triangles across instances', async () => {
   await expect(inspectGlb(await boxGlb(true))).rejects.toThrow(/50,000 triangles/);
 });
 
+it('imports a local GLB without a Tripo key and applies the existing review gate', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'forge-import-model-'));
+  const hub = new ProjectHub(workspace);
+  const assets = new ModelAssets(workspace);
+  const app = await createServer(hub, { port: 4317, host: '127.0.0.1' }, undefined, assets);
+  const bytes = Buffer.from(await boxGlb());
+  const headers = { host: '127.0.0.1:4317', 'content-type': 'application/octet-stream' };
+  const importFile = (fileName: string, payload = bytes, projectId = hub.active.project.projectId) => app.inject({
+    method: 'POST', url: '/api/assets/import?' + new URLSearchParams({ fileName, projectId }), headers, payload,
+  });
+  try {
+    expect((await importFile('asset.fbx')).statusCode).toBe(400);
+    expect((await importFile('../asset.glb')).statusCode).toBe(400);
+    expect((await importFile('Bad.glb', Buffer.from('bad'))).statusCode).toBe(422);
+    expect((await importFile('Crate.glb', bytes, 'old-project')).statusCode).toBe(409);
+    const imported = await importFile('metal_crate.glb');
+    expect(imported.statusCode).toBe(201);
+    const asset = imported.json<AssetRecord>();
+    expect(asset).toMatchObject({ name: 'metal crate', sourceFile: 'metal_crate.glb', provider: 'local', status: 'review', metrics: { triangles: 12 } });
+    expect(asset.prompt).toBeUndefined();
+    expect(assets.approved(hub.active.project.projectId, asset.id)).toBe(false);
+    expect(assets.list(hub.active.project.projectId)).toMatchObject({ configured: false, assets: [asset] });
+    assets.review(hub.active.project.projectId, asset.id, true);
+    expect(assets.placement(hub.active.project.projectId, { asset: asset.id, position: [1, 0, 1], meters: 2 })).toMatchObject({
+      mutation: { entity: { components: { mesh: { asset: asset.id }, collider: { size: [2, 1, 1] } } } },
+    });
+  } finally {
+    await hub.flush();
+    await app.close();
+  }
+});
+
 it('generates via mocked Tripo, gates approval, keeps immutable versions and places a playable collider', async () => {
   const bytes = await boxGlb();
   const workspace = mkdtempSync(join(tmpdir(), 'forge-models-'));

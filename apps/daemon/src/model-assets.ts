@@ -49,7 +49,7 @@ export class ModelAssets {
       throw new Error('This project already has a generation in progress.');
     }
     const previous = request.versionOf ? registry.get(request.versionOf) : undefined;
-    if (request.versionOf && !previous) throw new Error('The version source is unavailable in this project.');
+    if (request.versionOf && previous?.provider !== 'tripo') throw new Error('The Tripo version source is unavailable in this project.');
     const id = newId('asset');
     const family = previous?.family ?? id;
     const version = Math.max(0, ...[...registry.values()].filter((asset) => asset.family === family).map((asset) => asset.version)) + 1;
@@ -59,6 +59,19 @@ export class ModelAssets {
     };
     this.save(projectId, job);
     void this.run(projectId, job, key);
+    return AssetRecord.parse(job);
+  }
+
+  async importGlb(projectId: string, fileName: string, bytes: Uint8Array): Promise<AssetRecord> {
+    const metrics = await inspectGlb(bytes);
+    const id = newId('asset');
+    const name = fileName.slice(0, -4).replace(/[_-]+/g, ' ').slice(0, 80).trim() || 'Model';
+    const job: Job = {
+      id, family: id, version: 1, name, sourceFile: fileName, provider: 'local', model: 'glTF 2.0',
+      status: 'review', progress: 100, createdAt: Date.now(), metrics,
+    };
+    await this.writeModel(projectId, id, bytes);
+    this.save(projectId, job);
     return AssetRecord.parse(job);
   }
 
@@ -106,6 +119,7 @@ export class ModelAssets {
     let job = initial;
     try {
       if (!job.taskId) {
+        if (!job.prompt) throw new Error('The Tripo job is missing its prompt.');
         const taskId = await this.provider.submit(key, job.prompt);
         job = { ...job, taskId, status: 'generating' };
         this.save(projectId, job);
@@ -137,11 +151,7 @@ export class ModelAssets {
       const existing = existsSync(destination);
       const bytes = existing ? await readFile(destination) : await this.provider.download(url);
       const metrics = await inspectGlb(bytes);
-      if (!existing) {
-        const pending = destination + '.tmp';
-        await writeFile(pending, bytes);
-        await rename(pending, destination);
-      }
+      if (!existing) await this.writeModel(projectId, job.id, bytes);
       this.save(projectId, { ...job, status: 'review', progress: 100, metrics });
     } catch (error) {
       this.save(projectId, { ...job, status: 'failed', error: String((error as Error).message).replaceAll(key, '[redacted]').slice(0, 300) });
@@ -152,6 +162,14 @@ export class ModelAssets {
 
   private filePath(projectId: string, id: string): string {
     return join(this.workspace, projectId, 'assets', id + '.glb');
+  }
+
+  private async writeModel(projectId: string, id: string, bytes: Uint8Array): Promise<void> {
+    mkdirSync(join(this.workspace, projectId, 'assets'), { recursive: true });
+    const destination = this.filePath(projectId, id);
+    const pending = destination + '.tmp';
+    await writeFile(pending, bytes);
+    await rename(pending, destination);
   }
 
   private registry(projectId: string): Map<string, Job> {

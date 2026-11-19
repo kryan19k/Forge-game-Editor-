@@ -5,6 +5,7 @@ import {
   AgentStatus,
   AssetGenerate,
   AssetId,
+  AssetImport,
   AssetPlacement,
   CaptureView,
   ClientMessage,
@@ -40,6 +41,7 @@ import { starterInfo, starters, templates } from '@forge/templates';
 import type { Producer } from './producer';
 import type { ProjectHub } from './hub';
 import type { ModelAssets } from './model-assets';
+import { GLB_BYTE_LIMIT } from './glb';
 import { RoomManager } from './rooms';
 import type { ApplyOutcome, ProjectStore } from './store';
 
@@ -66,6 +68,7 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
   });
   await app.register(fastifyCors, { origin: [/^http:\/\/(localhost|127\.0\.0\.1):\d+$/] });
   await app.register(fastifyWebsocket);
+  app.addContentTypeParser('application/octet-stream', { parseAs: 'buffer' }, (_request, body, done) => done(null, body));
 
   /* ── Studio realtime channel ─────────────────────────────────────────── */
 
@@ -377,6 +380,21 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
     const { projectId } = req.query as { projectId?: string };
     return projectId === undefined || projectId === store.project.projectId;
   };
+
+  app.post('/api/assets/import', { bodyLimit: GLB_BYTE_LIMIT }, async (req, reply) => {
+    if (!directorAssets(req)) return reply.code(403).send({ error: 'Only the Director can import local models.' });
+    if (!matchingProject(req)) return reply.code(409).send({ error: 'The active project changed.' });
+    const input = AssetImport.safeParse(req.query);
+    if (!assets || !input.success || !Buffer.isBuffer(req.body)) {
+      return reply.code(400).send({ error: 'Choose a local .glb file.' });
+    }
+    const projectId = store.project.projectId;
+    try {
+      return reply.code(201).send(await assets.importGlb(projectId, input.data.fileName, req.body));
+    } catch (error) {
+      return reply.code(422).send({ error: (error as Error).message });
+    }
+  });
 
   app.post('/api/assets/key', async (req, reply) => {
     if (!directorAssets(req)) return reply.code(403).send({ error: 'Agents cannot set credentials' });

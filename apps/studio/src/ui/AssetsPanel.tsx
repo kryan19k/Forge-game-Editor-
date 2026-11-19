@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { send, submit, toast, useStudio } from '../state/store';
 import { viewportApi } from '../viewport/api';
 import { createPrefabPreview } from '../viewport/PrefabPreview';
-import { GeneratedAssets } from './GeneratedAssets';
+import { ModelLibrary } from './ModelLibrary';
 
 const EMPTY_PREFABS: Record<string, Prefab> = {};
 const EMPTY_REVISIONS: Record<string, number> = {};
@@ -58,7 +58,7 @@ export function AssetsPanel() {
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [form, setForm] = useState<'save' | 'describe' | null>(null);
   const [draft, setDraft] = useState('');
-  const [generated, setGenerated] = useState(false);
+  const [models, setModels] = useState(false);
   const prefab = prefabs[active];
 
   const save = () => {
@@ -92,10 +92,10 @@ export function AssetsPanel() {
         <button className="btn" onClick={() => useStudio.setState({ assetsOpen: false })}>Inspector</button>
       </div>
       <div className="team-threads" role="group" aria-label="Asset types">
-        <button className="team-thread micro" aria-pressed={!generated} onClick={() => setGenerated(false)}>Prefabs</button>
-        <button className="team-thread micro" aria-pressed={generated} onClick={() => setGenerated(true)}>Generated models</button>
+        <button className="team-thread micro" aria-pressed={!models} onClick={() => setModels(false)}>Prefabs</button>
+        <button className="team-thread micro" aria-pressed={models} onClick={() => setModels(true)}>Models</button>
       </div>
-      {generated ? projectId && <GeneratedAssets projectId={projectId} online={online} /> : <>
+      {models ? projectId && <ModelLibrary projectId={projectId} online={online} /> : <>
       <div className="asset-tools">
         <button className="btn" disabled={!online || !selection.length} onClick={() => { setForm('save'); setDraft(''); }}>Save selection</button>
         <button className="btn" disabled={!online} onClick={() => { setForm('describe'); setDraft(''); }}>Describe an asset…</button>
