@@ -3,6 +3,7 @@ import { Author, Transaction } from './mutations';
 import { EntityId } from './primitives';
 import type { DesignBrief } from './design';
 import type { SceneDoc } from './scene';
+import { ActivitySettings, type SceneActivity } from './activity';
 
 /* ── Crew: agents and humans connected to a project ───────────────────── */
 
@@ -77,6 +78,8 @@ export type ServerMessage =
       crew: CrewMember[];
       directives: Directive[];
       comms: CommsEntry[];
+      activity: SceneActivity[];
+      activitySettings: ActivitySettings;
       you: CrewMember;
       brief: DesignBrief | null;
     }
@@ -86,6 +89,8 @@ export type ServerMessage =
   | { type: 'crew'; crew: CrewMember[] }
   | { type: 'directives'; directives: Directive[] }
   | { type: 'comms'; entry: CommsEntry }
+  | { type: 'scene.activity'; entry: SceneActivity }
+  | { type: 'activity.settings'; settings: ActivitySettings }
   | { type: 'brief'; brief: DesignBrief | null }
   | {
       type: 'capture.request';
@@ -106,6 +111,7 @@ export const ClientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('history.redo') }),
   z.object({ type: z.literal('history.revert'), txId: z.string() }),
   z.object({ type: z.literal('selection'), entityIds: z.array(EntityId).max(500) }),
+  z.object({ type: z.literal('activity.settings'), settings: ActivitySettings }),
   z.object({
     type: z.literal('directive.create'),
     text: z.string().trim().min(1).max(2000),

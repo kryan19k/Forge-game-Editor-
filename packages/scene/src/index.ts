@@ -3,6 +3,7 @@ import { newId, type Author, type MutationInput, type SceneDoc, type Transaction
 export * from './graph';
 export * from './reducer';
 export * from './outline';
+export * from './activity';
 
 export function buildTransaction(
   scene: Pick<SceneDoc, 'sceneId' | 'revision'>,

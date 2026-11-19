@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { send, useStudio } from '../state/store';
+import { SceneActivityCard } from './SceneActivityCard';
 
 const hhmmss = (t: number) => new Date(t).toLocaleTimeString([], { hour12: false });
 const STATUS_COLOR = { open: 'var(--bone-2)', claimed: 'var(--amber)', done: 'var(--lime)', rejected: 'var(--rose)' } as const;
@@ -7,12 +8,16 @@ const STATUS_COLOR = { open: 'var(--bone-2)', claimed: 'var(--amber)', done: 'va
 /** Radio-log of everything the crew says and does, plus the Director's directive composer. */
 export function CrewChannel() {
   const comms = useStudio((s) => s.comms);
+  const activity = useStudio((s) => s.activity);
+  const { autoReact } = useStudio((s) => s.activitySettings);
+  const online = useStudio((s) => s.conn === 'online');
   const crew = useStudio((s) => s.crew);
   const directives = useStudio((s) => s.directives);
   const selection = useStudio((s) => s.selection);
   const [draft, setDraft] = useState('');
   const [attach, setAttach] = useState(true);
   const log = useRef<HTMLDivElement>(null);
+  const feed = useMemo(() => [...comms, ...activity].sort((a, b) => a.at - b.at), [comms, activity]);
 
   const colorOf = useMemo(() => {
     const m = new Map(crew.map((c) => [c.id, c.color]));
@@ -22,7 +27,7 @@ export function CrewChannel() {
   useEffect(() => {
     const el = log.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [comms.length]);
+  }, [feed]);
 
   const active = directives.filter((d) => d.status === 'open' || d.status === 'claimed').slice(-3);
   const agents = crew.filter((c) => c.kind === 'agent');
@@ -42,6 +47,11 @@ export function CrewChannel() {
         <span className="spacer" />
         <span className="dim">{agents.length ? `${agents.filter((a) => a.status !== 'idle').length}/${agents.length} active` : 'no agents linked'}</span>
       </div>
+      <label className="activity-toggle micro" title="Allow agents to offer follow-ups on scene changes">
+        <input type="checkbox" checked={autoReact} disabled={!online}
+          onChange={(event) => send({ type: 'activity.settings', settings: { autoReact: event.target.checked } })} />
+        Agent follow-ups
+      </label>
       {active.length > 0 && (
         <div className="dir-list">
           {active.map((d) => (
@@ -59,8 +69,10 @@ export function CrewChannel() {
         </div>
       )}
       <div className="comms" ref={log}>
-        {comms.length === 0 && <div className="dim" style={{ padding: '8px 12px' }}>Channel quiet.</div>}
-        {comms.map((c) => (
+        {feed.length === 0 && <div className="dim" style={{ padding: '8px 12px' }}>Channel quiet.</div>}
+        {feed.map((c) => 'changes' in c ? (
+          <SceneActivityCard key={c.txId} entry={c} color={colorOf(c.author.id, c.author.kind)} />
+        ) : (
           <div key={c.id} className={`comms-row ${c.level}`} style={{ '--c': colorOf(c.source.id, c.source.kind) } as React.CSSProperties}>
             <span className="t">{hhmmss(c.at)}</span>
             <span className="who">{c.source.name}</span>

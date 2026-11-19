@@ -1,4 +1,6 @@
 import type {
+  ActivitySettings,
+  SceneActivity,
   ClientMessage,
   CommsEntry,
   CrewMember,
@@ -30,6 +32,8 @@ export interface StudioState {
   crew: CrewMember[];
   directives: Directive[];
   comms: CommsEntry[];
+  activity: SceneActivity[];
+  activitySettings: ActivitySettings;
   me: CrewMember | null;
   selection: EntityId[];
   gizmo: GizmoMode;
@@ -53,6 +57,8 @@ export const useStudio = create<StudioState>(() => ({
   crew: [],
   directives: [],
   comms: [],
+  activity: [],
+  activitySettings: { autoReact: false },
   me: null,
   selection: [],
   gizmo: 'translate',
@@ -118,6 +124,8 @@ function handle(msg: ServerMessage): void {
         crew: msg.crew,
         directives: msg.directives,
         comms: msg.comms,
+        activity: msg.activity,
+        activitySettings: msg.activitySettings,
         me: msg.you,
         selection: sel,
         brief: msg.brief,
@@ -151,6 +159,12 @@ function handle(msg: ServerMessage): void {
       return;
     case 'comms':
       set((s) => ({ comms: [...s.comms, msg.entry].slice(-400) }));
+      return;
+    case 'scene.activity':
+      set((s) => ({ activity: [...s.activity, msg.entry].slice(-20) }));
+      return;
+    case 'activity.settings':
+      set({ activitySettings: msg.settings });
       return;
     case 'brief':
       set({ brief: msg.brief });

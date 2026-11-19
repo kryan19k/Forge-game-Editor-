@@ -14,6 +14,7 @@ FORGE is an engine where agents are the primary developers: a human **Director**
 3. Change: `forge_apply` — one transaction per logical change, a label a human would write, and `baseRevision`. On `CONFLICT`, re-read and redo. Never touch `LOCKED` entities.
 4. **Prove it**: `forge_playtest` for behavior, `forge_capture` for looks, `forge_database` lint for data. A gameplay claim without a passing playtest is not done.
 5. `forge_status(idle, "<result>")`; check `forge_directives`; answer the Director's directives with a one-line result.
+6. Check `forge_activity` between tasks. Store its returned cursor per project and use it as `since` on the next call. Read subsequent pages while `hasMore` is true. If `truncated` is true, refresh the scene outline to regain context. Offer unsolicited follow-ups only if the Director enabled `settings.autoReact`. For example, offer to populate a new watchtower with guards and wait for direction before editing.
 
 ## Load the right specialist skill
 

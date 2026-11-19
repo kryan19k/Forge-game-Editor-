@@ -414,6 +414,14 @@ input.text:focus { border-color: var(--molten); }
 .comms-row.action .msg { color: var(--bone); }
 .comms-row.warn .msg { color: var(--amber); }
 .comms-row.error .msg { color: var(--rose); }
+.activity-toggle { display: flex; align-items: center; gap: 7px; padding: 6px 12px; border-bottom: 1px solid var(--rule); color: var(--bone-3); }
+.activity-toggle input { margin: 0; accent-color: var(--molten); }
+.scene-activity { margin: 5px 12px; padding: 6px 8px; border: 1px solid var(--rule); border-left-color: var(--c); color: var(--bone-2); overflow-wrap: anywhere; }
+.scene-activity-head { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 3px; color: var(--bone-3); }
+.scene-activity-head span:first-child { color: var(--c); }
+.scene-activity strong { color: var(--bone); font-weight: 600; }
+.scene-activity summary { margin-top: 4px; color: var(--bone-3); cursor: pointer; }
+.scene-activity ul { margin: 4px 0 0; padding-left: 16px; }
 .directive-box { border-top: 1px solid var(--rule); padding: 10px 12px 12px; display: grid; gap: 8px; flex: none; }
 .directive-box textarea {
   resize: none; height: 52px; width: 100%; background: var(--ink-0); border: 1px solid var(--rule-hi); outline: none;

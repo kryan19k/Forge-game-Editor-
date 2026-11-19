@@ -1,6 +1,7 @@
 import fastifyCors from '@fastify/cors';
 import fastifyWebsocket from '@fastify/websocket';
 import {
+  ActivityCursor,
   AgentStatus,
   CaptureView,
   ClientMessage,
@@ -64,6 +65,8 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
       crew: [...store.crew.values()],
       directives: [...store.directives.values()],
       comms: store.comms.slice(-200),
+      activity: store.readActivity().activity,
+      activitySettings: store.activitySettings,
       brief: store.brief,
       you,
     });
@@ -110,6 +113,9 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
         case 'selection':
           store.humanSelection = msg.entityIds;
           store.touchCrew(DIRECTOR, { focusEntityIds: msg.entityIds });
+          return;
+        case 'activity.settings':
+          store.setActivitySettings(msg.settings);
           return;
         case 'directive.create':
           store.createDirective(DIRECTOR, msg.text, msg.focusEntityIds);
@@ -343,6 +349,12 @@ export async function createServer(hub: ProjectHub, opts: { port: number; host: 
   app.get('/api/history', async (req) => {
     const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 30) || 30, 400);
     return { revision: store.scene.revision, history: store.history(limit) };
+  });
+
+  app.get('/api/activity', async (req, reply) => {
+    const query = z.object({ since: z.coerce.number().pipe(ActivityCursor).optional() }).safeParse(req.query);
+    if (!query.success) return reply.code(400).send({ error: z.prettifyError(query.error) });
+    return store.readActivity(query.data.since);
   });
 
   app.get('/api/selection', async () => ({

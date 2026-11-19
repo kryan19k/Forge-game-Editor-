@@ -42,6 +42,8 @@ pnpm --filter @forge/mcp-server smoke   # drives the real MCP server end-to-end 
 
 ## Studio controls
 
+The crew feed shows committed scene activity as entities are added, deleted, renamed, reparented or gain and lose components. Agents can read the same feed using `forge_activity`. The Director can enable agent follow-ups per project.
+
 `W/E/R` move/rotate/scale · `Q` world/local · `X` snap · `F` frame (`Shift F` all) · `Ctrl D` duplicate · `Del` delete · `L` lock from agents · `H` hide · `F2` rename · `Ctrl Z / Ctrl ⇧ Z` undo/redo · `Ctrl K` command palette (type anything else to direct the crew). Drag any number field to scrub; click to type.
 
 ## Play mode

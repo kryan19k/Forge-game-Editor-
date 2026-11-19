@@ -1,6 +1,6 @@
 import { SceneDoc, type Author, type MutationInput } from '@forge/contracts';
 import { describe, expect, it } from 'vitest';
-import { applyTransaction, buildTransaction, outlineScene, type TxResult } from '../src';
+import { applyTransaction, buildTransaction, describeSceneChanges, outlineScene, type TxResult } from '../src';
 
 const human: Author = { kind: 'human', id: 'kory', name: 'Kory' };
 const agent: Author = { kind: 'agent', id: 'claude', name: 'Claude' };
@@ -21,6 +21,35 @@ const box = (id: string, parentId: string | null = null): MutationInput => ({
 });
 
 describe('applyTransaction', () => {
+  it('describes net structural changes, including children deleted or restored with a parent', () => {
+    const start = empty();
+    const created = ok(apply(start, human, [box('ent_tower'), box('ent_guard', 'ent_tower')]));
+    expect(describeSceneChanges(start, created.scene, created.touched)).toMatchObject([
+      { kind: 'created', entity: { id: 'ent_tower' }, position: [0, 0, 0], parent: null },
+      { kind: 'created', entity: { id: 'ent_guard' }, position: [0, 0, 0], parent: { id: 'ent_tower' } },
+    ]);
+    const edited = ok(apply(created.scene, human, [
+      { op: 'rename_entity', entityId: 'ent_guard', name: 'Watchkeeper' },
+      { op: 'reparent', entityId: 'ent_guard', parentId: null },
+      { op: 'remove_component', entityId: 'ent_guard', component: 'mesh' },
+      { op: 'patch_component', entityId: 'ent_guard', component: 'light', value: { kind: 'point' } },
+    ]));
+    expect(describeSceneChanges(created.scene, edited.scene, edited.touched)).toMatchObject([
+      { kind: 'renamed', entity: { name: 'Watchkeeper' }, previousName: 'ent_guard' },
+      { kind: 'reparented', parent: null, previousParent: { id: 'ent_tower' } },
+      { kind: 'component_removed', component: 'mesh' },
+      { kind: 'component_added', component: 'light' },
+    ]);
+    const deleted = ok(apply(created.scene, human, [{ op: 'delete_entity', entityId: 'ent_tower' }]));
+    expect(describeSceneChanges(created.scene, deleted.scene, deleted.touched)).toMatchObject([
+      { kind: 'deleted', entity: { id: 'ent_tower' } },
+      { kind: 'deleted', entity: { id: 'ent_guard' } },
+    ]);
+    const restored = ok(apply(deleted.scene, human, deleted.inverse));
+    expect(describeSceneChanges(deleted.scene, restored.scene, restored.touched)).toEqual(describeSceneChanges(start, created.scene, created.touched));
+    const noop = ok(apply(start, human, [box('ent_temp'), { op: 'delete_entity', entityId: 'ent_temp' }]));
+    expect(describeSceneChanges(start, noop.scene, noop.touched)).toEqual([]);
+  });
   it('creates entities with defaults and bumps revision', () => {
     const r = ok(apply(empty(), human, [box('ent_crate')]));
     expect(r.scene.revision).toBe(1);

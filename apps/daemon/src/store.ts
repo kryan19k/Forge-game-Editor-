@@ -1,7 +1,10 @@
 import {
+  ActivitySettings,
+  SceneActivity,
   SceneDoc,
   newId,
   type Author,
+  type ActivityPage,
   type CaptureView,
   type CommsEntry,
   type CrewMember,
@@ -17,7 +20,7 @@ import {
   type Transaction,
   type TxError,
 } from '@forge/contracts';
-import { applyTransaction, buildTransaction } from '@forge/scene';
+import { applyTransaction, buildTransaction, describeSceneChanges } from '@forge/scene';
 import { projectFromTemplate } from '@forge/templates';
 import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -28,6 +31,7 @@ interface Record_ {
   entry: HistoryEntry;
   tx: Transaction;
   inverse: Mutation[];
+  activity?: SceneActivity;
 }
 
 export type ApplyOutcome = { ok: true; entry: HistoryEntry } | { ok: false; error: TxError };
@@ -53,7 +57,9 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
   readonly comms: CommsEntry[] = [];
   humanSelection: EntityId[] = [];
   private saveTimer: NodeJS.Timeout | undefined;
+  private historyWrites = Promise.resolve();
   private readonly dir: string;
+  activitySettings: ActivitySettings;
 
   /**
    * @param initial a pre-built scene (genre starters); otherwise the template seeds it.
@@ -63,6 +69,8 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
     super();
     this.dir = join(workspaceDir, projectId);
     mkdirSync(this.dir, { recursive: true });
+    const settingsPath = join(this.dir, 'activity.json');
+    this.activitySettings = ActivitySettings.parse(existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, 'utf8')) : {});
     const scenePath = join(this.dir, 'scene.json');
     const onDisk = existsSync(scenePath);
     const seeded = onDisk || initial ? null : projectFromTemplate(templateId, projectId, name);
@@ -86,6 +94,7 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
     const result = applyTransaction(this.scene, txInput);
     if (!result.ok) return result;
     const { tx } = result;
+    const changes = describeSceneChanges(this.scene, result.scene, result.touched);
     this.scene = result.scene;
     const entry: HistoryEntry = {
       txId: tx.txId,
@@ -97,7 +106,11 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
       createdAt: tx.createdAt,
       ...(tx.revertOf ? { revertOf: tx.revertOf } : {}),
     };
-    this.remember({ entry, tx, inverse: result.inverse });
+    const activity: SceneActivity | undefined = changes.length
+      ? { revision: entry.revision, txId: tx.txId, author: tx.author, at: Date.now(), changes }
+      : undefined;
+    const record = { entry, tx, inverse: result.inverse, ...(activity ? { activity } : {}) };
+    this.remember(record);
 
     if (tx.revertOf) {
       const target = this.records.get(tx.revertOf);
@@ -110,11 +123,12 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
     }
 
     this.emit('message', { type: 'tx.applied', tx, entry });
+    if (activity) this.emit('message', { type: 'scene.activity', entry: activity });
     if (tx.author.kind === 'agent') {
       this.touchCrew(tx.author, { status: 'working', focusEntityIds: result.touched.filter((id) => this.scene.entities[id]) });
       this.log(tx.author, 'action', `${tx.label} · ${tx.mutations.length} op${tx.mutations.length === 1 ? '' : 's'} → rev ${entry.revision}`);
     }
-    this.persist({ entry, tx, inverse: result.inverse });
+    this.persist(record);
     return { ok: true, entry };
   }
 
@@ -209,6 +223,29 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
   }
 
   /* ── crew, comms, directives ───────────────────────────────────────── */
+
+  readActivity(since?: number): ActivityPage {
+    const records = this.order.map((id) => this.records.get(id)!);
+    const entries = records.flatMap((record) => record.activity ? [record.activity] : []);
+    const matching = since === undefined ? entries.slice(-20) : entries.filter((entry) => entry.revision > since);
+    const activity = matching.slice(0, 20);
+    const hasMore = matching.length > activity.length;
+    const oldestRevision = records[0]?.entry.revision ?? this.scene.revision + 1;
+    return {
+      projectId: this.project.projectId,
+      activity,
+      cursor: hasMore ? activity.at(-1)!.revision : this.scene.revision,
+      hasMore,
+      truncated: since !== undefined && since < oldestRevision - 1,
+      settings: this.activitySettings,
+    };
+  }
+
+  setActivitySettings(settings: ActivitySettings): void {
+    writeFileSync(join(this.dir, 'activity.json'), JSON.stringify(settings));
+    this.activitySettings = settings;
+    this.emit('message', { type: 'activity.settings', settings });
+  }
 
   touchCrew(author: Pick<Author, 'id' | 'name' | 'kind'>, patch: Partial<Pick<CrewMember, 'status' | 'message' | 'focusEntityIds'>> = {}): CrewMember {
     let m = this.crew.get(author.id);
@@ -317,7 +354,10 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
   }
 
   private persist(rec: Record_): void {
-    void appendFile(join(this.dir, 'history.jsonl'), `${JSON.stringify(rec)}\n`);
+    const line = `${JSON.stringify(rec)}\n`;
+    this.historyWrites = this.historyWrites.then(() => appendFile(join(this.dir, 'history.jsonl'), line)).catch((error: unknown) => {
+      console.error('FORGE could not save transaction history', error);
+    });
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => void writeFile(join(this.dir, 'scene.json'), JSON.stringify(this.scene, null, 2)), 200);
   }
@@ -329,6 +369,11 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
     for (const line of lines) {
       try {
         const rec = JSON.parse(line) as Record_;
+        if (rec.activity) {
+          const parsed = SceneActivity.safeParse(rec.activity);
+          if (parsed.success) rec.activity = parsed.data;
+          else delete rec.activity;
+        }
         if (rec.entry.revision <= this.scene.revision) this.remember(rec);
       } catch {
         /* skip torn line */
@@ -353,8 +398,9 @@ export class ProjectStore extends EventEmitter<{ message: [ServerMessage] }> {
     this.emit('message', { type: 'brief', brief: this.brief });
   }
 
-  flush(): Promise<void> {
+  async flush(): Promise<void> {
     clearTimeout(this.saveTimer);
-    return writeFile(join(this.dir, 'scene.json'), JSON.stringify(this.scene, null, 2));
+    await this.historyWrites;
+    await writeFile(join(this.dir, 'scene.json'), JSON.stringify(this.scene, null, 2));
   }
 }

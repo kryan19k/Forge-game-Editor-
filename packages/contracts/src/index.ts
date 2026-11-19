@@ -7,3 +7,4 @@ export * from './playtest';
 export * from './net';
 export * from './database';
 export * from './design';
+export * from './activity';

@@ -5,7 +5,7 @@
  * validated, conflict-checked, lock-respecting, undoable, and visible to the human
  * in the Studio as it happens.
  */
-import { AgentStatus, CaptureView, ComponentName, DirectiveStatus, EntityId, Mutation, PlaytestStep } from '@forge/contracts';
+import { ActivityCursor, AgentStatus, CaptureView, ComponentName, DirectiveStatus, EntityId, Mutation, PlaytestStep } from '@forge/contracts';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -52,6 +52,7 @@ Workflow:
 3. forge_apply with ONE transaction per logical change and a clear human-readable label. Pass the baseRevision you read: if a human changed those entities meanwhile you get CONFLICT — re-read and retry, never blindly overwrite.
 4. forge_capture to SEE the result, and forge_playtest to PROVE gameplay works (walk_to, interact, expect). Check both before reporting done.
 5. Check forge_directives for queued instructions from the Director; claim, then mark done with a short response.
+6. Check forge_activity between tasks. Keep its cursor per project and continue while hasMore is true. Only offer unsolicited follow-ups on scene activity when settings.autoReact is true.
 
 Genres: start new games with forge_project_create from a template (exploration, rpg, mmorpg, fighting, racing) and load the matching FORGE skill (forge-rpg, forge-mmo, forge-fighting, forge-racing; forge-game-builder for everything) — also available as MCP prompts on this server. Game rules live in scene.game (forge_game_settings; change via set_game).
 
@@ -136,6 +137,17 @@ server.registerTool(
     annotations: { readOnlyHint: true },
   },
   async ({ limit }) => text(await call('GET', `/api/history?limit=${limit}`)),
+);
+
+server.registerTool(
+  'forge_activity',
+  {
+    title: 'Read scene activity',
+    description: 'Read committed entity changes by the Director and agents. A first call returns recent activity. Pass the returned cursor as since for new activity, and keep polling when hasMore is true. Track cursors per projectId. settings.autoReact is the Director’s opt-in for unsolicited follow-ups.',
+    inputSchema: { since: ActivityCursor.optional() },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ since }) => text(await call('GET', since === undefined ? '/api/activity' : `/api/activity?since=${since}`)),
 );
 
 server.registerTool(

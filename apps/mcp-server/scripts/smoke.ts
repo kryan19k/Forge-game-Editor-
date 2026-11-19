@@ -54,6 +54,11 @@ await call('forge_apply', {
     },
   ],
 });
+const activity = await call('forge_activity', { since: rev });
+const changes = JSON.parse(activity.content[0]!.text!).activity.flatMap((entry: { changes: unknown[] }) => entry.changes);
+if (!changes.some((change: { kind: string; entity: { id: string } }) => change.kind === 'created' && change.entity.id === 'ent_smoke_pylon')) {
+  throw new Error('created entity missing from MCP activity');
+}
 const bad = await call('forge_apply', {
   label: 'Smoke: must fail (bad roughness)',
   mutations: [{ op: 'patch_component', entityId: 'ent_smoke_pylon', component: 'mesh', value: { material: { roughness: 7 } } }],
